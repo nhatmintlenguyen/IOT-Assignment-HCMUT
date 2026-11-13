@@ -1,0 +1,54 @@
+# Local ThingsBoard CE (N07) + optional Cloudflare Tunnel.
+# Based on the official ThingsBoard CE Docker guide (tb-node + separate PostgreSQL),
+# trimmed to what this project needs: Web UI/HTTP API (8080) and MQTT (1883).
+# NOTE: not a verbatim copy of the official file; see the guide for the full version.
+
+services:
+  postgres:
+    restart: always
+    image: "postgres:18"
+    environment:
+      POSTGRES_DB: thingsboard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d thingsboard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  thingsboard-ce:
+    restart: always
+    image: "thingsboard/tb-node:${TB_VERSION:-4.3.1.8}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # Localhost only: the Gateway runs on the same machine; remote access goes through the tunnel.
+      - "127.0.0.1:8080:8080"   # Web UI + REST/HTTP device API
+      - "127.0.0.1:1883:1883"   # MQTT
+    environment:
+      TB_SERVICE_ID: tb-node
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/thingsboard
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "10"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: tb-tunnel
+    restart: unless-stopped
+    profiles: ["tunnel"]        # only started with: make tunnel
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - thingsboard-ce
+
+volumes:
+  postgres-data:
