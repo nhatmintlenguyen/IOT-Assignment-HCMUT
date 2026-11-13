@@ -1,98 +1,98 @@
-# Spécifications Matérielles : Kit OhStem AIoT & YoloUNO
+# Hardware Specification: OhStem AIoT Kit & YoloUNO
 
-Ce document détaille l'ensemble des composants physiques du **Kit AIoT OhStem** (référence : [OhStem AIoT Kit](https://ohstem.vn/san-pham/aiot-kit-hoc-lap-trinh-iot-va-ai/)), leur affectation au projet **Smart Safe Guardian**, et l'analyse électrique (tensions, courants, prévention des coupures/brownouts).
+This document details all physical hardware components provided in the **OhStem AIoT Kit** (Reference: [OhStem AIoT Kit](https://ohstem.vn/san-pham/aiot-kit-hoc-lap-trinh-iot-va-ai/)), their functional role in the **Smart Safe Guardian** project, and a comprehensive electrical analysis (voltage logic levels, current spikes, and brownout prevention).
 
 ---
 
-## 1. Inventaire Exhaustif du Matériel Disponible
+## 1. Exhaustive Hardware Inventory
 
-### 1.1 Unités de Traitement (Microcontrôleurs)
+### 1.1 Microcontroller Processing Units
 
-| Dispositif | Puce & Caractéristiques | Rôle dans le Projet |
+| Device | Chipset & Technical Features | Project Functional Role |
 | :--- | :--- | :--- |
-| **YoloUNO** | **ESP32-S3 Dual-Core Xtensa LX7 @ 240 MHz**<br>• 512 Ko SRAM, 8 Mo Flash<br>• Wi-Fi 2.4 GHz (802.11 b/g/n) + BLE 5.0<br>• Facteur de forme Arduino Uno R3 avec **12 connecteurs Grove intégrés**<br>• 4 ports servo GVS dédiés, port USB Type-C natif, jack DC 7-12V | **Unité centrale du Coffre (Vault Unit)** : Gestion des capteurs, authentification, contrôle du pêne (servo), liaison série Gateway et serveur Web de secours. |
-| **Yolo:Bit** | **ESP32 Dual-Core**<br>• Matrice de 25 LED RGB (5×5)<br>• 2 boutons-poussoirs A et B<br>• Buzzer piézoélectrique intégré<br>• Accéléromètre / Gyroscope intégrés<br>• Alimentation par boîtier 2× piles AAA (3V) ou USB-C | **Badge Portatif de Sécurité (Wearable Badge)** : Demande d'accès sans fil via ESP-NOW (Bouton A) ou alerte de détresse (Bouton B), feedback visuel et sonore. |
+| **YoloUNO** | **ESP32-S3 Dual-Core Xtensa LX7 @ 240 MHz**<br>• 512 KB SRAM, 8 MB Flash<br>• Wi-Fi 2.4 GHz (802.11 b/g/n) + BLE 5.0<br>• Arduino Uno R3 form factor with **12 onboard Grove connectors**<br>• 4 dedicated GVS servo headers, native USB Type-C, 7–12V DC power jack | **Central Vault Controller (Vault Unit)**: Sensor acquisition, access authentication, deadbolt servo actuation, serial Gateway communication, and embedded emergency Web Server. |
+| **Yolo:Bit** | **ESP32 Dual-Core**<br>• 5×5 programmable RGB LED Matrix (25 addressable pixels)<br>• 2 tactile pushbuttons (Button A and B)<br>• Integrated piezoelectric buzzer<br>• 3-axis accelerometer / gyroscope<br>• Powered via 2× AAA battery pack (3V) or USB Type-C | **Wearable Security Badge**: Wireless access requests via ESP-NOW (Button A) or silent duress / panic alarms (Button B), with real-time audio and visual status feedback. |
 
 ---
 
-### 1.2 Capteurs Disponibles (Sensors)
+### 1.2 Available Sensors
 
-| Capteur | Interface & Port Grove | Usage dans le Coffre | État |
+| Sensor | Interface & Grove Port | Role in Secure Vault | Status |
 | :--- | :--- | :--- | :---: |
-| **DHT20** | **I2C** (Adresse `0x38`) — Port Grove I2C | Télémétrie continue température & humidité (climatisation et détection départ de feu). | **Retenu** |
-| **Capteur de Lumière (LDR)** | **Analogique** — Port Grove A0 | Placé à l'intérieur du coffre. Détecte toute ouverture physique illicite en mode verrouillé. | **Retenu** |
-| **Capteur Ultrason (Grove)** | **Numérique** — Port Grove D2/D3 | Détecte l'approche d'un technicien (< 30 cm) pour réveiller l'écran LCD de veille. | **Retenu** |
-| **Récepteur IR (1838)** | **Numérique** — Port Grove D4 | Capture des trames NEC émises par la télécommande pour le PIN de secours. | **Retenu** |
-| **Capteur de Mouvement PIR** | Numérique — Port Grove | Détection volumétrique infrarouge de présence humaine. | *Optionnel* |
-| **Capteur d'Humidité du Sol** | Analogique — Port Grove | Destiné à l'agriculture connectée. | *Non utilisé* |
+| **DHT20** | **I2C** (Address `0x38`) — Grove I2C Port | Continuous internal climate telemetry (temperature and humidity monitoring for fire prevention and environmental control). | **Selected** |
+| **Light Sensor (LDR)** | **Analog** — Grove Port A0 | Installed inside the vault interior. Detects unauthorized physical breaches by sensing ambient light while in `LOCKED` state. | **Selected** |
+| **Ultrasonic Distance Sensor** | **Digital** — Grove Port D2 | Measures technician approach distance (< 30 cm) to wake up the standby LCD screen. | **Selected** |
+| **IR Receiver (1838)** | **Digital** — Grove Port D4 | Captures 38 kHz NEC infrared pulses from the remote control for backup 4-digit PIN authentication. | **Selected** |
+| **PIR Motion Sensor** | Digital — Grove Port | Passive infrared volumetric human motion detection. | *Spare / Optional* |
+| **Soil Moisture Sensor** | Analog — Grove Port | Targeted for smart agriculture projects. | *Not Used* |
 
 ---
 
-### 1.3 Actionneurs, Affichage & Contrôle (Actuators & Output)
+### 1.3 Actuators, Displays & Control Modules
 
-| Module | Interface | Usage dans le Coffre | État |
+| Module | Interface | Role in Secure Vault | Status |
 | :--- | :--- | :--- | :---: |
-| **Moteur Servo (MG90 / SG90)** | **PWM (50 Hz)** — Port GVS Servo | Pêne mécanique de verrouillage de la porte (0° = Déverrouillé, 90° = Verrouillé). | **Retenu** |
-| **Écran LCD 1602 I2C** | **I2C** (Adresse `0x27` ou `0x3F`) — Port Grove I2C | Interface utilisateur locale (messages de bienvenue, saisie du PIN masqué `* * * *`, statut). | **Retenu** |
-| **LED NeoPixel intégrée** | **GPIO 45** (1-Wire interne YoloUNO) | Balise d'état lumineuse : **Vert** (Ouvert), **Bleu** (Saisie PIN), **Rouge** (Verrouillé/Alarme). | **Retenu** |
-| **LED Heartbeat D13** | **GPIO 48** (Interne YoloUNO) | Clignotement à 1 Hz attestant du bon fonctionnement de l'ordonnanceur FreeRTOS. | **Retenu** |
-| **Télécommande IR** | Protocole NEC sans fil (38 kHz) | Clavier numérique déporté pour la saisie du code PIN de secours. | **Retenu** |
-| **Module Relais 2 Canaux** | Numérique / USB (Isolation optocouplée) | Disponible pour commuter un verrou électromagnétique externe (maglock 12V) ou sirène. | *En réserve* |
-| **Module 4 LED RGB Grove** | 1-Wire numérique | Barre de LED additionnelle si besoin d'effets lumineux déportés. | *En réserve* |
-| **Mini Ventilateur & Pompe** | PWM / Numérique | Refroidissement d'urgence si surchauffe interne. | *En réserve* |
+| **Servo Motor (MG90 / SG90)** | **PWM (50 Hz)** — Dedicated GVS Port | Mechanical door deadbolt mechanism (0° = Unlocked, 90° = Locked). | **Selected** |
+| **1602 LCD Display (PCF8574)** | **I2C** (Address `0x27` / `0x3F`) — Grove I2C Port | Local physical user interface (prompts, masked PIN input `* * * *`, status codes). | **Selected** |
+| **Onboard NeoPixel RGB LED** | **GPIO 45** (Internal 1-Wire bus) | Visual status beacon: **Green** (Unlocked), **Blue** (PIN Entry), **Red** (Locked / Alarm). | **Selected** |
+| **Onboard Heartbeat LED** | **GPIO 48** (D13 internal line) | 1 Hz periodic toggle indicating FreeRTOS task scheduler health. | **Selected** |
+| **IR Remote Control** | Wireless NEC protocol (38 kHz) | Handheld numeric keypad (keys 0–9) for secondary manual PIN entry. | **Selected** |
+| **2-Channel Relay Module** | Digital / USB (Optocoupled isolation) | Available to drive external high-voltage electronic maglocks (12V) or sirens. | *Spare / Optional* |
+| **4-LED NeoPixel Grove Bar** | 1-Wire Digital | Additional visual lighting strip if auxiliary signaling is needed. | *Spare / Optional* |
+| **Mini Fan & Submersible Pump** | PWM / Digital | Active ventilation or liquid dispensing. | *Not Used* |
 
 ---
 
-## 2. Analyse Électrique & Réponses aux Risques Matériels
+## 2. Electrical Analysis & Hardware Risk Mitigation
 
-### 2.1 Risque de Tension & Adaptation de Niveaux (3.3V vs 5V)
-* **La problématique classique :** Sur une platine d'essai (*breadboard*) avec des composants génériques (ex: HC-SR04 classique), le capteur est alimenté en 5V et sa broche `Echo` renvoie 5V directement sur le GPIO de l'ESP32, risquant de griller l'entrée (limitée à 3.6V).
-* **La réalité avec le kit OhStem YoloUNO :** 
-  * Tous les modules du kit sont au format **Grove 4 broches**.
-  * Les ports Grove I2C et Analogiques de la YoloUNO sont déjà adaptés aux niveaux logiques de l'ESP32-S3 (3.3V).
-  * Le capteur ultrason OhStem intègre sur sa carte le circuit de conditionnement pour être branché sans danger directement sur les ports Grove numériques.
-  * **Conclusion : Aucun composant externe (résistance, convertisseur de niveau) n'est nécessaire.** Tout est plug-and-play et sécurisé.
-
----
-
-### 2.2 Risque d'Appel de Courant du Servomoteur (Brownout Reset)
-* **Le phénomène :** Un servomoteur micro (SG90 ou MG90) consomme environ 100 à 250 mA en rotation à vide, mais peut appeler **600 à 800 mA en crête** s'il force contre une butée mécanique (pêne coincé).
-* **Le risque :** Si la carte YoloUNO est alimentée uniquement par un port USB 2.0 d'ordinateur portable (limité à 500 mA), cette pointe de courant fait chuter la tension d'alimentation en dessous de 4.5V, déclenchant le détecteur de sous-tension de l'ESP32-S3 (**Brownout Detector: Reset**).
-* **Solutions et Recommandations :**
-  1. **Alimentation recommandée pour les démos :** Brancher la carte YoloUNO sur un port USB 3.0 / USB-C d'ordinateur (pouvant délivrer 900 mA à 1.5 A), ou utiliser un bloc chargeur USB 5V 2A / une batterie externe (power bank).
-  2. **Alimentation externe via Jack DC :** La YoloUNO dispose d'un connecteur d'alimentation DC 5521 acceptant du 7V à 12V. Son régulateur de tension interne alimente alors confortablement les ports GVS pour servomoteur.
-  3. **Course mécanique libre :** Calibrer l'angle PWM du servo (ex: entre 10° et 80° au lieu de forcer aux extrêmes 0° et 90°) pour s'assurer que le palonnier ne force jamais contre une paroi.
+### 2.1 Logic Voltage Levels & Level Shifting (3.3V vs. 5V)
+* **The Classical Breadboard Issue:** Generic sensors (such as generic HC-SR04 modules) operate on 5V and output 5V on the `Echo` pin directly into the ESP32 GPIO, which risks damaging the 3.3V silicon (ESP32 maximum absolute rating is 3.6V).
+* **The OhStem Grove Architecture:**
+  * All modules supplied in the OhStem AIoT Kit follow the **4-pin Grove standard**.
+  * The YoloUNO Grove ports route power and signal lines with onboard 3.3V logic matching the ESP32-S3.
+  * The OhStem ultrasonic distance module includes onboard signal-conditioning circuitry designed specifically for direct connection to ESP32 digital Grove pins.
+  * **Conclusion: Zero external level shifters or pull-up resistors are required.** All connections are plug-and-play and electrically safe.
 
 ---
 
-### 2.3 Utilisation du Module Relais (En option)
-* Le kit comporte un module **Relais 2 canaux**.
-* **Avantage :** Il possède une isolation optocouplée complète.
-* **Scénario alternatif possible :** Si l'on souhaite simuler un coffre-fort industriel lourd équipé d'une ventouse magnétique (*maglock*) ou d'un verrou solénoïde 12V, le relais peut commuter cette alimentation sans aucun risque de parasitage pour le microcontrôleur. 
-* Dans le cadre du projet, le **servo moteur MG90** reste le choix prioritaire car son mouvement rotatif est immédiatement visible lors de la vidéo démo.
+### 2.2 Servomotor Peak Current Draw (Brownout Reset Prevention)
+* **The Phenomenon:** A micro servomotor (SG90 or MG90) draws 100–250 mA during normal rotation, but can surge to **600–800 mA peak stall current** if the mechanical latch faces physical friction or is jammed against a frame.
+* **The Risk:** If the YoloUNO board is powered exclusively from a legacy laptop USB 2.0 port (strictly limited to 500 mA), this transient current spike causes the 5V bus to sag below 4.5V, triggering the ESP32-S3 internal brownout detector (**Brownout Detector: Reset**).
+* **Mitigation Strategy:**
+  1. **Recommended Demo Power Supply:** Power the YoloUNO via a modern USB 3.0 / USB-C port (delivering 900 mA to 1.5 A), a 5V 2A smartphone wall adapter, or an external power bank.
+  2. **External DC Supply via Barrel Jack:** The YoloUNO features an onboard 5521 DC barrel jack accepting 7V to 12V DC. The onboard linear voltage regulator comfortably supplies the high-current GVS servo rail.
+  3. **Mechanical Calibration:** Calibrate the PWM sweep angle (e.g., 10° to 80° rather than forcing hard stops at 0° and 90°) to guarantee that the servo horn never stalls against a physical barrier.
 
 ---
 
-### 2.4 Le nombre de périphériques est-il trop élevé ?
-* **Sur breadboard avec des fils volants (DuPont) :** 8 modules représenteraient plus de 30 fils, ce qui serait suicidaire pour un projet étudiant (faux contacts garantis lors du déplacement de la maquette).
-* **Sur la YoloUNO :** 
-  * La carte intègre **12 connecteurs Grove détrompés** et **4 connecteurs GVS dédiés**.
-  * Chaque périphérique possède son câble dédié rigide à clipser.
-  * Il n'y a **aucun chevauchement de broches** (I2C partage le même bus avec des adresses distinctes `0x38` et `0x27`, l'ADC utilise A0, l'IR utilise D4, le servo utilise le port GVS).
-* **Verdict :** Le nombre de périphériques est **parfaitement sain et gérable**. C'est propre, fiable pour la soutenance, et très impressionnant visuellement.
+### 2.3 Role of the 2-Channel Relay Module
+* The kit includes an optocoupled **2-channel Relay Module**.
+* **Advantage:** Complete galvanic isolation between control signals and power circuits.
+* **Alternative Scenario:** If simulating an industrial high-security vault equipped with a 12V electromagnetic lock (*maglock*) or solenoid bolt, the relay can switch this external loop without electrical interference on the microcontroller.
+* For the project scope, the **MG90 Servomotor** remains the primary actuator choice because its 90° mechanical rotation provides immediate, undeniable visual evidence in the video demonstration.
 
 ---
 
-## 3. Tableau de Câblage Recommandé sur YoloUNO
+### 2.4 Peripheral Count Feasibility Evaluation
+* **On a Prototype Breadboard:** 8 loose breakout boards would require over 30 Dupont jumper wires, creating an unstable rat's nest prone to loose contacts during transit.
+* **On the YoloUNO Board:**
+  * The board features **12 keyed Grove connectors** and **4 dedicated 3-pin GVS headers**.
+  * Every peripheral utilizes a secure, keyed latching cable.
+  * There are **zero pin collisions** (I2C peripherals share the bus under distinct hardware addresses `0x38` and `0x27`, ADC utilizes A0, IR utilizes D4, and the servo connects to GVS).
+* **Verdict:** The planned peripheral count is **fully feasible, stable, and clean**. It provides an impressive physical setup with zero risk of loose wires during presentation.
 
-| Périphérique | Type de Port sur YoloUNO | Connecteur Physique | Adresse / Broche |
+---
+
+## 3. Recommended YoloUNO Pin & Port Mapping
+
+| Peripheral | YoloUNO Port Type | Physical Connector | Address / Signal Pin |
 | :--- | :--- | :--- | :--- |
-| **Capteur DHT20** | Grove I2C | Port I2C #1 | Bus I2C (`0x38`) |
-| **Afficheur LCD 1602** | Grove I2C | Port I2C #2 (ou chaîné) | Bus I2C (`0x27` ou `0x3F`) |
-| **Capteur LDR (Lumière)** | Grove Analogique | Port Analogique A0 | Canaux ADC1 |
-| **Capteur Ultrason** | Grove Numérique | Port Numérique D2 | GPIO Dédié Trig/Echo |
-| **Récepteur IR (1838)** | Grove Numérique | Port Numérique D4 | GPIO Dédié Capture IR |
-| **Servo MG90** | Connecteur GVS (3 broches) | Port Servo #1 | PWM LEDC (50 Hz) |
-| **LED NeoPixel** | Intégrée sur board | Circuit interne | GPIO 45 |
-| **LED D13 (Statut)** | Intégrée sur board | Circuit interne | GPIO 48 |
-| **Liaison PC Gateway** | Câble USB-C | Port USB-C YoloUNO | UART CDC @ 115200 baud |
+| **DHT20 Climate Sensor** | Grove I2C | Grove Port I2C #1 | I2C Bus (`0x38`) |
+| **1602 LCD Display** | Grove I2C | Grove Port I2C #2 (or daisy-chained) | I2C Bus (`0x27` or `0x3F`) |
+| **Light Sensor (LDR)** | Grove Analog | Grove Port A0 | ADC1 Channel (GPIO 1) |
+| **Ultrasonic Distance Sensor** | Grove Digital | Grove Port D2 | Dedicated Digital GPIO (Trig/Echo) |
+| **IR Receiver (1838)** | Grove Digital | Grove Port D4 | Dedicated Digital GPIO (IR Capture) |
+| **MG90 Servomotor** | 3-Pin GVS Header | Servo Header #1 | Dedicated LEDC PWM (50 Hz) |
+| **Onboard NeoPixel** | Internal PCB Circuit | Fixed Internal Route | GPIO 45 |
+| **Onboard Heartbeat LED** | Internal PCB Circuit | Fixed Internal Route | GPIO 48 |
+| **PC Gateway Bridge** | USB Type-C Cable | USB-C Port | CDC UART @ 115200 baud |
