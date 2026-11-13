@@ -50,7 +50,7 @@
 | O3  | Phát hiện bất thường tại biên bằng Isolation Forest                 | Xuất `anomaly_score` và cờ cảnh báo sớm theo cửa sổ trượt               |
 | O4  | Dự phòng kép CoreIOT + ThingsBoard cục bộ                           | Rút mạng Internet: dữ liệu vẫn vào ThingsBoard cục bộ, không mất khung  |
 | O5  | Giám sát/điều khiển từ xa an toàn                                   | Dashboard + RPC; RPC mở khóa có cơ chế xác nhận (mục 8.4)               |
-| O6  | Cập nhật firmware từ xa (OTA)                                       | Cập nhật firmware YoloUNO qua Wi-Fi từ CoreIOT                          |
+| O6  | Web server khẩn cấp trên bo mạch (T07)                              | Cung cấp cổng web HTTP trực tiếp trên YoloUNO để xem trạng thái và mở khóa |
 
 
 > Lưu ý về thuật ngữ: blueprint gọi hệ thống là "dual-authentication" nhưng luồng hiện tại là **thẻ HOẶC PIN**. Đề xuất định nghĩa rõ: *chế độ thường* = một trong hai kênh; *chế độ bảo mật cao* (tùy chọn, bật qua RPC/dashboard) = **cần cả thẻ VÀ PIN**. Nếu muốn giữ đúng tên "dual-authentication", chế độ bảo mật cao nên được cài đặt (xem mục 6.3).
@@ -69,7 +69,8 @@
 - **FR6** Phát hiện đột nhập vật lý bằng LDR khi đang `LOCKED`.
 - **FR7** Gửi telemetry và sự kiện qua UART (JSON) lên Gateway.
 - **FR8** Gateway: phát hiện bất thường, dashboard cục bộ, publish MQTT kép, nhận RPC.
-- **FR9** CoreIOT: dashboard, RuleChain, thông báo Telegram/Email, OTA.
+- **FR9** CoreIOT: dashboard, RuleChain, thông báo Telegram/Email.
+- **FR10** On-device Web Server (T07): phục vụ trang web HTTP trực tiếp trên YoloUNO để giám sát và mở khóa khẩn cấp.
 
 ### 3.2 Yêu cầu phi chức năng
 
@@ -101,7 +102,7 @@ Khóa cơ khí thực tế chịu lực; chứng nhận an toàn; quản lý nhi
           │                                   │
           ▼ MQTT                              ▼ MQTT
  [CoreIOT (chính)]               [ThingsBoard CE trong Docker (dự phòng)]
-   Dashboard, RuleChain, Telegram, RPC, OTA
+   Dashboard, RuleChain, Telegram, RPC
 ```
 
 
@@ -224,9 +225,11 @@ JSON Lines, một đối tượng mỗi dòng, 115200 baud. Ví dụ (giá trị
 
 Gateway cần xử lý dòng hỏng, mất kết nối cổng serial và tự kết nối lại.
 
-### 6.6 Wi-Fi và ESP-NOW cùng lúc (rủi ro)
+### 6.6 Máy chủ Web trên thiết bị (T07)
 
-OTA (T14) cần YoloUNO kết nối Wi-Fi, trong khi ESP-NOW phải chạy cùng kênh vô tuyến với Wi-Fi STA. Thẻ đeo cần khóa cùng kênh với router của phòng lab. Đây là rủi ro tích hợp cần thử sớm (mục 12).
+YoloUNO triển khai một máy chủ HTTP nhẹ (dựa trên thư viện `WebServer` của ESP32, kế thừa từ bài thực hành Lab 4).
+- Khi kết nối vào Wi-Fi cục bộ hoặc SoftAP của YoloUNO, người dùng có thể truy cập trang web bảng điều khiển nội bộ.
+- Trang web hiển thị nhiệt độ, độ ẩm, độ sáng và cung cấp nút bấm mở khóa khẩn cấp / khóa tủ mà không phụ thuộc vào Gateway hay kết nối Internet.
 
 ---
 
@@ -255,13 +258,12 @@ Streamlit: trạng thái khóa, nhiệt độ/độ ẩm, LDR, biểu đồ `ano
 
 ## 8. Đám mây và dự phòng
 
-### 8.1 CoreIOT (T11, T12, T13, T14)
+### 8.1 CoreIOT (T11, T12, T13)
 
 - **Telemetry** qua MQTT topic `v1/devices/me/telemetry`; **RPC** qua `v1/devices/me/rpc/request/+` và phản hồi `.../response/{id}` (API MQTT kiểu ThingsBoard; nhóm xác nhận lại với tài liệu của CoreIOT).
 - **Dashboard (T11)**: biểu đồ nhiệt độ/độ ẩm/LDR/`anomaly_score`, thẻ trạng thái khóa, nút RPC (khóa/mở, bật chế độ bảo mật cao).
 - **RuleChain (T12)**: ngưỡng nhiệt độ/độ ẩm, sự kiện `tamper`/`duress`, `anomaly_score` vượt ngưỡng → tạo cảnh báo.
 - **Thông báo (T13)**: Telegram bot (và/hoặc Email).
-- **OTA (T14)**: cập nhật firmware YoloUNO qua Wi-Fi; cần quy trình xác minh toàn vẹn firmware và kế hoạch quay lui nếu cập nhật lỗi (partition OTA kép).
 - Địa chỉ máy chủ `app.coreiot.io` lấy theo blueprint; cần xác nhận lại với hướng dẫn môn học trước khi đưa vào báo cáo.
 
 ### 8.2 ThingsBoard cục bộ bằng Docker (N07)
@@ -318,7 +320,7 @@ Cho phép mở khóa qua internet là rủi ro lớn nhất. Đề xuất:
 | TC7  | Kịch bản bất thường đa biến      | `anomaly_score` vượt ngưỡng, cờ cảnh báo sớm                        |
 | TC8  | Ngắt Internet                    | Local TB vẫn nhận dữ liệu; sau khi có mạng, dữ liệu đệm được gửi bù |
 | TC9  | RPC mở/khóa từ dashboard         | Chỉ chấp nhận theo quy tắc 8.4                                      |
-| TC10 | OTA                              | Firmware mới chạy; lỗi → quay lui                                   |
+| TC10 | Web Server trên bo mạch (T07)    | Truy cập UI qua IP cục bộ; xem cảm biến và mở khóa thành công       |
 | TC11 | Rút cáp Gateway                  | Khóa vẫn vận hành, trạng thái giữ an toàn                           |
 | TC12 | Chế độ bảo mật cao               | Chỉ mở khi có cả thẻ và PIN trong cửa sổ thời gian                  |
 
@@ -330,27 +332,23 @@ Các số liệu đo (độ trễ, tỷ lệ báo giả, độ chính xác mô h
 ## 11. Ánh xạ sang thang điểm môn học
 
 
-| Hạng mục         | Mã  | Nội dung đề xuất đáp ứng                                                                                                                                      | Điểm (theo blueprint) |
-| :---------------- | :--- | :------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------: |
-| Cảm biến         | T01 | Cảm biến I2C **trên Tasmota** (theo thông báo). DHT20 trên firmware tự viết có thể **không** đủ điều kiện; chỉ tính nếu dùng Tasmota hoặc giảng viên xác nhận | 0.5 (chưa chắc)       |
-| Giao tiếp cục bộ | T06 | ESP-NOW Yolo:Bit ↔ YoloUNO                                                                                                                                    | 1.5                   |
-| Gateway          | T08 | Gateway PC/Pi, UART + RPC                                                                                                                                     | 1.0                   |
-|                  | T09 | Isolation Forest                                                                                                                                              | 1.0                   |
-|                  | T10 | Dashboard Streamlit/Tkinter                                                                                                                                   | 1.0                   |
-| CoreIOT          | T11 | Dashboard + nút RPC                                                                                                                                           | 1.0                   |
-|                  | T12 | RuleChain ngưỡng                                                                                                                                              | 1.0                   |
-|                  | T13 | Telegram/Email                                                                                                                                                | 0.5                   |
-|                  | T14 | OTA qua Wi-Fi                                                                                                                                                 | 2.0                   |
-|                  | T15 | Gateway trên CoreIOT đồng bộ với Gateway cục bộ — thiết kế dual-publish có thể liên quan nhưng **chưa chắc đủ điều kiện**; cần hỏi giảng viên cách hiểu       | 2.0 (chưa chắc)       |
-| Tổng công nghệ   |     | Thô: 9.5 (T01, T06, T08–T14) hoặc 11.5 nếu T15 được công nhận; tối đa tính 8.0                                                                                | 8.0                   |
-| Báo cáo          |     | 6 chương theo mẫu báo cáo của môn, ≥ 5 tài liệu tham khảo, kèm bảng tự đánh giá và bảng phân công                                                             | 2.0                   |
-| Nâng cao         | N07 | ThingsBoard CE tự triển khai trên máy cục bộ (Docker)                                                                                                         | 1.0                   |
-| **Tổng**         |     | min(8; Σ công nghệ) + báo cáo (≤ 2) + min(1; Σ nâng cao)                                                                                                      | **10.0**              |
+| Hạng mục         | Mã  | Nội dung đề xuất đáp ứng                                                                                                                                      | Điểm |
+| :---------------- | :--- | :------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---: |
+| Giao tiếp cục bộ | T06 | ESP-NOW Yolo:Bit ↔ YoloUNO                                                                                                                                    | 1.5   |
+|                  | T07 | Web Server trên bo mạch (trang web HTTP trực tiếp trên YoloUNO, kế thừa từ Lab 4)                                                                             | 1.0   |
+| Gateway          | T08 | Gateway PC/Pi, UART + RPC                                                                                                                                     | 1.0   |
+|                  | T09 | Isolation Forest (Scikit-Learn) phát hiện bất thường                                                                                                          | 1.0   |
+|                  | T10 | Dashboard Streamlit trên Gateway                                                                                                                              | 1.0   |
+| CoreIOT          | T11 | Dashboard CoreIOT + nút RPC điều khiển khóa                                                                                                                   | 1.0   |
+|                  | T12 | RuleChain xử lý ngưỡng nhiệt độ và cảnh báo đột nhập                                                                                                          | 1.0   |
+|                  | T13 | Thông báo cảnh báo qua Telegram bot                                                                                                                           | 0.5   |
+| Tổng công nghệ   |     | Tổng điểm công nghệ đề xuất: **8.0 / 8.0** (vừa đúng trần 8.0, không rủi ro, không phụ thuộc Tasmota hay OTA)                                                 | 8.0   |
+| Báo cáo          |     | 6 chương theo mẫu báo cáo của môn, ≥ 5 tài liệu tham khảo, kèm bảng tự đánh giá và bảng phân công                                                             | 2.0   |
+| Nâng cao         | N07 | ThingsBoard CE tự triển khai trên máy cục bộ (Docker)                                                                                                         | 1.0   |
+| **Tổng**         |     | min(8; Σ công nghệ) + báo cáo (≤ 2) + min(1; Σ nâng cao)                                                                                                      | **10.0** |
 
 
-Điểm số các mục lấy từ thông báo đồ án (học kỳ 261, ngày 27/10/2026). Mã nhóm điểm và nội dung T08–T15 trong thông báo là: T08 gateway tổng hợp dữ liệu, gửi lên CoreIOT và nhận lệnh điều khiển; T09 AI chạy trên gateway; T10 giao diện giám sát/điều khiển trên gateway; T11 template/dashboard/điều khiển từ xa; T12 RuleChain; T13 cảnh báo khi vượt ngưỡng; T14 OTA.
-
-Điểm công nghệ thô vượt trần 8.0 nên còn dư địa: nếu phải cắt giảm khi thiếu thời gian thì ưu tiên giữ các mục trọng số cao và chắc chắn đủ điều kiện (T06, T08, T09, T10, T11, T12). T14 (2.0 điểm) có rủi ro tích hợp cao nhất (mục 6.6), nên làm sớm. Một phần được làm dở vẫn được giảng viên chấm theo mức độ hoàn thành, nhưng chỉ khi có bằng chứng trong báo cáo.
+Điểm số các mục lấy từ thông báo đồ án (học kỳ 261, ngày 27/10/2026). Phương án này loại bỏ rủi ro của OTA (T14) và sự ràng buộc của Tasmota (T01), thay thế bằng On-device Web Server (T07) đã được thực hành tại Lab 4. Bộ danh mục công nghệ đạt chính xác 8.0/8.0 với độ khả thi cao nhất.
 
 ---
 
@@ -374,27 +372,25 @@ Kế hoạch bên dưới tính theo tuần tương đối (10 tuần) và cần
 
 | Giai đoạn    | Nội dung                                                                                                                           | Sản phẩm                         |
 | :------------ | :---------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------- |
-| 1 (tuần 1–2) | Xác nhận phần cứng (pinout YoloUNO, địa chỉ I2C, model servo); đọc cảm biến; ESP-NOW cơ bản; **thử sớm Wi-Fi + ESP-NOW cùng kênh** | Firmware nhận gói, đọc DHT20/LDR |
-| 2 (tuần 3–4) | FreeRTOS đầy đủ, máy trạng thái, IR PIN, servo, LCD, NeoPixel; giao thức UART                                                      | Tủ chạy độc lập                  |
-| 3 (tuần 5–6) | Gateway, ThingsBoard Docker, MQTT kép, dashboard cục bộ; thu dữ liệu; huấn luyện Isolation Forest                                  | Gateway + local TB               |
-| 4 (tuần 7–8) | CoreIOT: dashboard, RuleChain, Telegram, RPC, OTA                                                                                  | Hệ thống tích hợp                |
-| 5 (tuần 9)   | Kiểm thử TC1–TC12, đo số liệu, sửa lỗi                                                                                             | Bảng kết quả                     |
-| 6 (tuần 10)  | Báo cáo 6 chương, video demo                                                                                                       | Báo cáo + demo                   |
+| 1 (tuần 1–2) | Xác nhận phần cứng (pinout YoloUNO Grove, địa chỉ I2C, model servo); đọc cảm biến; ESP-NOW cơ bản | Firmware nhận gói, đọc DHT20/LDR |
+| 2 (tuần 3–4) | FreeRTOS đầy đủ, máy trạng thái, IR PIN, servo, LCD, NeoPixel, Web Server (T07); giao thức UART    | Tủ chạy độc lập + Web UI         |
+| 3 (tuần 5–6) | Gateway, ThingsBoard Docker, MQTT kép, dashboard cục bộ; thu dữ liệu; huấn luyện Isolation Forest  | Gateway + local TB               |
+| 4 (tuần 7–8) | CoreIOT: dashboard, RuleChain, Telegram, RPC                                                       | Hệ thống tích hợp                |
+| 5 (tuần 9)   | Kiểm thử TC1–TC12, đo số liệu, sửa lỗi                                                             | Bảng kết quả                     |
+| 6 (tuần 10)  | Báo cáo 6 chương, video demo                                                                       | Báo cáo + demo                   |
 
 
-**Phân công**: `[điền theo thành viên: firmware / gateway+AI / cloud+OTA / báo cáo]`.
+**Phân công**: `[điền theo thành viên: firmware + web / gateway + AI / cloud + báo cáo]`.
 
 ### Rủi ro chính
 
 
 | Rủi ro                                        | Mức        | Giảm thiểu                               |
 | :--------------------------------------------- | :----------: | :---------------------------------------- |
-| ESP-NOW và Wi-Fi xung đột kênh, ảnh hưởng OTA | Cao        | Thử tích hợp ngay giai đoạn 1; khóa kênh |
-| Không có YoloUNO hoặc sai sơ đồ chân          | Cao        | Xác nhận phần cứng trong tuần 1          |
-| LDR báo giả do ánh sáng môi trường            | Trung bình | Hiệu chuẩn, hysteresis, lọc              |
-| Thiếu dữ liệu huấn luyện                      | Trung bình | Kịch bản thu thập + mô phỏng ghi rõ      |
-| Mất kết nối CoreIOT khi demo                  | Trung bình | Local TB làm dự phòng, quay video        |
-| Sụt áp khi servo chạy                         | Thấp       | Tụ lọc, nguồn riêng                      |
+| Sụt áp khi servo quay (brownout reset)         | Trung bình | Nguồn USB 5V 2A riêng / jack DC 7-12V    |
+| LDR báo giả do ánh sáng môi trường            | Trung bình | Hiệu chuẩn, hysteresis, ngưỡng trong tối |
+| Thiếu dữ liệu huấn luyện anomaly              | Thấp       | Kịch bản thu thập + mô phỏng ghi rõ      |
+| Mất kết nối CoreIOT khi demo                  | Thấp       | Local TB Docker làm dự phòng, quay video |
 
 
 ### 12.1 Sản phẩm bàn giao và quy định môn học
