@@ -44,6 +44,7 @@ void task_sensor_monitor(void *pvParameters) {
     (void)pvParameters;
 
     Wire.begin(11, 12);
+    Wire.setTimeOut(50);
     pinMode(LIGHT_SENSOR_PIN, INPUT);
     pinMode(ULTRASONIC_TRIG_PIN, OUTPUT);
     pinMode(ULTRASONIC_ECHO_PIN, INPUT);

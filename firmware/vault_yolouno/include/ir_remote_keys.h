@@ -16,12 +16,12 @@
 #define IR_KEY_8       0x52
 #define IR_KEY_9       0x4A
 
-#define IR_KEY_A       0x45
-#define IR_KEY_B       0x46
-#define IR_KEY_C       0x47 // Validate / Enter (Action de validation du code PIN)
-#define IR_KEY_D       0x44 // Clear / Effacer
+#define IR_KEY_A       0x45 // Backspace / Cancel PIN
+#define IR_KEY_B       0x46 // Acknowledge breach alarm
+#define IR_KEY_C       0x47 // Validate / Enter (PIN validation)
+#define IR_KEY_D       0x44 // Clear PIN buffer
 #define IR_KEY_E       0x43
-#define IR_KEY_F       0x0D
+#define IR_KEY_F       0x0D // Manual lock trigger
 
 #define IR_KEY_UP      0x40
 #define IR_KEY_DOWN    0x19
@@ -29,7 +29,7 @@
 #define IR_KEY_RIGHT   0x09
 #define IR_KEY_CONFIG  0x15
 
-// Convertit une commande hexadécimale en caractère ('0'-'9', 'A'-'F', ou '\0')
+// Convert hexadecimal command to character ('0'-'9', 'A'-'F', or '\0')
 inline char ir_code_to_char(uint16_t command) {
     switch (command) {
         case IR_KEY_0: return '0';

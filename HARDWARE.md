@@ -35,10 +35,10 @@ are not part of these three Grove rows.
 
 | Sensor | Interface & Grove Port | Role in Secure Vault | Status |
 | :--- | :--- | :--- | :---: |
-| **DHT20** | **I2C** (Address `0x38`) — Grove I2C Port | Continuous internal climate telemetry (temperature and humidity monitoring for fire prevention and environmental control). | **Selected** |
-| **Light Sensor (LDR)** | **Analog** — Grove Port A1-A0 | Installed inside the vault interior. Detects unauthorized physical breaches by sensing ambient light while in `LOCKED` state. | **Selected** |
-| **Ultrasonic Distance Sensor** | **Digital** — Grove Port D6-D5 | Measures technician approach distance (< 30 cm) to wake up the standby LCD screen. | **Selected** |
-| **IR Receiver (1838)** | **Digital** — Grove Port D4-D3 | Captures 38 kHz NEC infrared pulses from the remote control for backup 4-digit PIN authentication. | **Selected** |
+| **DHT20** | **I2C** (Address `0x38`) — Grove I2C Port | Continuous internal climate telemetry (temperature and humidity monitoring for fire prevention and environmental control). Non-blocking I2C timeouts prevent FreeRTOS freeze if disconnected. | **Selected** |
+| **Light Sensor (LDR)** | **Analog** — Grove Port A1-A0 (Signal A0 / GPIO 1) | Installed inside the vault interior. Detects unauthorized physical breaches by sensing ambient light while in `LOCKED` state. | **Selected** |
+| **Ultrasonic Distance Sensor** | **Digital** — Grove Port D4-D3 (Trig D3 / GPIO 6, Echo D4 / GPIO 7) | Measures technician approach distance (< 30 cm) to gate authentication and wake up the standby LCD screen. | **Selected** |
+| **IR Receiver (1838)** | **Digital** — Grove Port D6-D5 (Signal D5 / GPIO 8) | Captures 38 kHz NEC infrared pulses from the remote control for 4-digit PIN authentication, dynamic PIN change, and manual controls. | **Selected** |
 | **PIR Motion Sensor** | Digital — Grove Port | Passive infrared volumetric human motion detection. | *Spare / Optional* |
 | **Soil Moisture Sensor** | Analog — Grove Port | Targeted for smart agriculture projects. | *Not Used* |
 
@@ -94,7 +94,7 @@ are not part of these three Grove rows.
 * **On the YoloUNO Board:**
   * The board features **12 keyed Grove connectors** and **4 dedicated 3-pin GVS headers**.
   * Every peripheral utilizes a secure, keyed latching cable.
-  * There are **zero pin collisions** (I2C peripherals share the bus under distinct hardware addresses `0x38` and `0x27`, the LDR utilizes the analog `A1-A0` Grove port, the IR receiver utilizes the digital `D4-D3` Grove port, and the servo uses GVS signal `D11`).
+  * There are **zero pin collisions** (I2C peripherals share the bus under distinct hardware addresses `0x38` and `0x27`, the LDR utilizes the analog `A1-A0` Grove port, the Ultrasonic sensor utilizes the digital `D4-D3` Grove port, the IR receiver utilizes the digital `D6-D5` Grove port, and the servo uses GVS signal `D11`).
 * **Verdict:** The planned peripheral count is **fully feasible, stable, and clean**. It provides an impressive physical setup with zero risk of loose wires during presentation.
 
 ---

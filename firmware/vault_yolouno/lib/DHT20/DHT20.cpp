@@ -89,6 +89,11 @@ uint8_t DHT20::resetSensor()
 //
 int DHT20::read()
 {
+  if (!isConnected())
+  {
+    return DHT20_ERROR_CONNECT;
+  }
+
   //  do not read to fast == more than once per second.
   if (millis() - _lastRead < 1000)
   {
@@ -96,10 +101,17 @@ int DHT20::read()
   }
 
   int status = requestData();
-  if (status < 0) return status;
-  //  wait for measurement ready
+  if (status != 0) return DHT20_ERROR_CONNECT;
+
+  //  wait for measurement ready with safety timeout (max 100ms)
+  //  prevents infinite loop when sensor is unplugged (returns 0xFF)
+  uint32_t startWait = millis();
   while (isMeasuring())
   {
+    if (millis() - startWait > 100)
+    {
+      return DHT20_ERROR_CONNECT;
+    }
     yield();
   }
   //  read the measurement

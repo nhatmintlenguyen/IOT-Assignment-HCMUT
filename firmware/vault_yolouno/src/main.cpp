@@ -8,30 +8,98 @@
 #include "vault_state.h"
 #include "servo_control.h"
 #include "ir_reader.h"
+#include "lcd_display.h"
 
 #define NEO_PIN 45
 #define LED_COUNT 1
 
-typedef struct struct_message {
-    char cmd[16];        // "UNLOCK" ou "DURESS"
-    uint32_t counter;    // Compteur anti-rejeu simple
-} struct_message;
+typedef struct struct_badge_request {
+    char cmd[16];        // "UNLOCK", "LOCK", "MASTER_AUTH"
+    uint32_t counter;    // Anti-replay sequence counter
+} struct_badge_request;
 
-struct_message incomingBadgeMsg;
+typedef struct struct_vault_response {
+    char status[16];     // "OK_UNLOCKED", "OK_LOCKED", "ALREADY_OPEN", "ALREADY_LOCKED", "DENIED_LOCKDOWN", "DENIED_PRESENCE", "DENIED"
+    uint32_t counter;    // Echo counter
+} struct_vault_response;
 
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
 void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len) {
+    const uint8_t *srcMac = recv_info->src_addr;
 #else
-void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
+void onDataRecv(const uint8_t *srcMac, const uint8_t *data, int len) {
 #endif
-    if (len == sizeof(struct_message)) {
-        memcpy(&incomingBadgeMsg, data, sizeof(incomingBadgeMsg));
+    if (len == sizeof(struct_badge_request)) {
+        struct_badge_request req;
+        memcpy(&req, data, sizeof(req));
         Serial.printf("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"%s\",\"counter\":%lu}\n",
-                      incomingBadgeMsg.cmd, (unsigned long)incomingBadgeMsg.counter);
+                      req.cmd, (unsigned long)req.counter);
 
-        if (strcmp(incomingBadgeMsg.cmd, "UNLOCK") == 0) {
-            request_unlock();
+        struct_vault_response resp;
+        resp.counter = req.counter;
+        strcpy(resp.status, "DENIED");
+
+        const VaultStatus status = get_vault_status();
+        const SensorSnapshot sensors = get_sensor_snapshot();
+
+        if (strcmp(req.cmd, "UNLOCK") == 0) {
+            if (status.lockdownActive) {
+                strcpy(resp.status, "DENIED_LOCKDOWN");
+            } else if (status.lockState == LockState::Unlocked) {
+                strcpy(resp.status, "ALREADY_OPEN");
+            } else if (!sensors.personNear && !status.standbyActive) {
+                strcpy(resp.status, "DENIED_PRESENCE");
+                lcd_show_notification("BADGE DENIED", "Approach first");
+            } else {
+                if (status.breachActive) {
+                    acknowledge_breach();
+                    lcd_show_notification("BADGE", "Breach Acked");
+                } else {
+                    lcd_show_notification("BADGE", "Access Granted");
+                }
+                request_unlock();
+                strcpy(resp.status, "OK_UNLOCKED");
+            }
+        } else if (strcmp(req.cmd, "LOCK") == 0) {
+            if (status.breachActive) {
+                // Pressing LOCK during breach silences the alarm while keeping vault locked
+                acknowledge_breach();
+                strcpy(resp.status, "OK_ACKED");
+                lcd_show_notification("BADGE", "Breach Acked");
+            } else if (status.lockState == LockState::Locked) {
+                strcpy(resp.status, "ALREADY_LOCKED");
+            } else {
+                set_lock_state(LockState::Locked);
+                strcpy(resp.status, "OK_LOCKED");
+                lcd_show_notification("BADGE", "Vault Locked");
+            }
+        } else if (strcmp(req.cmd, "FAKE_BADGE") == 0) {
+            // Simulated rogue / unauthorized badge (Combo A+B)
+            Serial.println("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"FAKE_BADGE\",\"result\":\"denied_unauthorized\",\"alert\":\"ROGUE_BADGE_DETECTED\"}");
+            record_failed_attempt("badge_espnow");
+            strcpy(resp.status, "DENIED_UNAUTHORIZED");
+            lcd_show_notification("ROGUE BADGE", "Access Denied");
+        } else if (strcmp(req.cmd, "ACK_BREACH") == 0) {
+            if (status.breachActive) {
+                acknowledge_breach();
+                strcpy(resp.status, "OK_ACKED");
+                lcd_show_notification("BADGE", "Breach Acked");
+            } else {
+                strcpy(resp.status, "NO_ALERT_TO_ACK");
+            }
         }
+
+        // Register peer if not already present
+        if (!esp_now_is_peer_exist(srcMac)) {
+            esp_now_peer_info_t peer = {};
+            memcpy(peer.peer_addr, srcMac, 6);
+            peer.channel = 0;
+            peer.encrypt = false;
+            esp_now_add_peer(&peer);
+        }
+
+        // Send response back to the badge
+        esp_now_send(srcMac, (uint8_t *)&resp, sizeof(resp));
     }
 }
 
@@ -45,26 +113,34 @@ void task_neopixel(void *pvParameters) {
     const SensorSnapshot sensors = get_sensor_snapshot();
     const VaultStatus status = get_vault_status();
 
-    // 1. Alerte intrusion : rouge stroboscopique
-    if (status.breachActive) {
-      strip.setPixelColor(0, strip.Color(255, 0, 0));
-      strip.show();
-      vTaskDelay(pdMS_TO_TICKS(250));
-      strip.clear();
-      strip.show();
-      vTaskDelay(pdMS_TO_TICKS(250));
-      continue;
-    }
-
-    // 2. Coffre déverrouillé : vert continu
-    if (status.lockState == LockState::Unlocked) {
-      strip.setPixelColor(0, strip.Color(0, 255, 0)); // Vert
+    // 0. Remote security lockdown: solid purple/magenta
+    if (status.lockdownActive) {
+      strip.setPixelColor(0, strip.Color(180, 0, 180));
       strip.show();
       vTaskDelay(pdMS_TO_TICKS(500));
       continue;
     }
 
-    // 3. Erreur capteur : jaune clignotant
+    // 1. Security breach alert: rapid 80ms red strobe
+    if (status.breachActive) {
+      strip.setPixelColor(0, strip.Color(255, 0, 0));
+      strip.show();
+      vTaskDelay(pdMS_TO_TICKS(80));
+      strip.clear();
+      strip.show();
+      vTaskDelay(pdMS_TO_TICKS(80));
+      continue;
+    }
+
+    // 2. Vault unlocked: solid green
+    if (status.lockState == LockState::Unlocked) {
+      strip.setPixelColor(0, strip.Color(0, 255, 0)); // Green
+      strip.show();
+      vTaskDelay(pdMS_TO_TICKS(500));
+      continue;
+    }
+
+    // 3. Sensor fault: blinking yellow
     if (!sensors.climateValid) {
       strip.setPixelColor(0, strip.Color(255, 255, 0));
       strip.show();
@@ -75,13 +151,13 @@ void task_neopixel(void *pvParameters) {
       continue;
     }
 
-    // 4. État verrouillé normal : bleu / cyan / rouge selon température
+    // 4. Normal locked state: blue / cyan / red gradient based on temperature
     if (sensors.temperatureC < 20.0f) {
-      strip.setPixelColor(0, strip.Color(0, 0, 255)); // Bleu
+      strip.setPixelColor(0, strip.Color(0, 0, 255)); // Blue (Cold)
     } else if (sensors.temperatureC < 28.0f) {
-      strip.setPixelColor(0, strip.Color(0, 150, 150)); // Cyan
+      strip.setPixelColor(0, strip.Color(0, 150, 150)); // Cyan (Comfortable)
     } else {
-      strip.setPixelColor(0, strip.Color(255, 0, 0)); // Rouge chaud
+      strip.setPixelColor(0, strip.Color(255, 0, 0)); // Red (Warm)
     }
 
     strip.show();
@@ -105,7 +181,7 @@ void task_telemetry_uart(void *pvParameters) {
     const SensorSnapshot sensors = get_sensor_snapshot();
     const VaultStatus status = get_vault_status();
     Serial.printf(
-        "{\"type\":\"telemetry\",\"temp\":%.2f,\"hum\":%.2f,\"climate_valid\":%s,\"light_adc\":%d,\"distance_cm\":%.1f,\"distance_valid\":%s,\"person_near\":%s,\"state\":\"%s\",\"breach\":%s}\n",
+        "{\"type\":\"telemetry\",\"temp\":%.2f,\"hum\":%.2f,\"climate_valid\":%s,\"light_adc\":%d,\"distance_cm\":%.1f,\"distance_valid\":%s,\"person_near\":%s,\"state\":\"%s\",\"breach\":%s,\"lockdown\":%s}\n",
         sensors.temperatureC,
         sensors.humidityPct,
         sensors.climateValid ? "true" : "false",
@@ -114,38 +190,39 @@ void task_telemetry_uart(void *pvParameters) {
         sensors.distanceValid ? "true" : "false",
         sensors.personNear ? "true" : "false",
         status.lockState == LockState::Locked ? "LOCKED" : "UNLOCKED",
-        status.breachActive ? "true" : "false");
+        status.breachActive ? "true" : "false",
+        status.lockdownActive ? "true" : "false");
     vTaskDelay(pdMS_TO_TICKS(2000));
   }
 }
 
 void setup() {
   Serial.begin(115200);
-  delay(1500); // Laisse le temps à l'USB CDC de se stabiliser
+  delay(1500); // Allow USB CDC time to stabilize
 
   Serial.println("\n==========================================");
   Serial.println("  Smart Safe Guardian - YoloUNO (Vault)");
   Serial.println("==========================================");
 
-  // Initialisation du servomoteur (verrouillé par défaut à 75°)
+  // Initialize deadbolt servo motor
   servo_control_init();
 
-  // Initialisation du récepteur IR (Grove D6-D5, pin D5 = GPIO 8)
+  // Initialize IR remote receiver (Grove D6-D5, pin D5 = GPIO 8)
   ir_reader_init();
 
-  // Initialisation ESP-NOW
+  // Initialize ESP-NOW
   WiFi.mode(WIFI_STA);
   Serial.print("[INFO] YoloUNO MAC: ");
   Serial.println(WiFi.macAddress());
 
   if (esp_now_init() == ESP_OK) {
     esp_now_register_recv_cb(onDataRecv);
-    Serial.println("[OK] ESP-NOW Receiver initialisé.");
+    Serial.println("[OK] ESP-NOW Receiver initialized.");
   } else {
-    Serial.println("[ERREUR] Échec initialisation ESP-NOW sur YoloUNO.");
+    Serial.println("[ERROR] Failed to initialize ESP-NOW on YoloUNO.");
   }
 
-  // Tâches FreeRTOS
+  // FreeRTOS Tasks
   xTaskCreate(task_sensor_monitor, "Sensor Monitor", 4096, NULL, 2, NULL);
   xTaskCreate(task_neopixel, "NeoPixel Control", 2048, NULL, 2, NULL);
   xTaskCreate(task_led_blink, "LED Heartbeat Control", 2048, NULL, 1, NULL);
@@ -153,22 +230,36 @@ void setup() {
 }
 
 void loop() {
-  // 1. Tick de la machine à état (gestion du reverrouillage auto après 10s)
+  // 1. Vault state machine tick (handles 30s auto-relock)
   vault_state_tick();
 
-  // 2. Décodage infrarouge de la télécommande
+  // 2. Decode infrared remote commands
   ir_reader_tick();
 
-  // 2. Écoute des commandes reçues sur le port série USB (Gateway ou test manuel)
+  // 3. Listen for serial USB commands (Gateway or manual CLI testing)
   if (Serial.available()) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
-    if (cmd == "unlock" || cmd.indexOf("\"unlock\"") >= 0) {
-      Serial.println("[CMD] Commande 'unlock' reçue via USB");
+    if (cmd == "unlock" || cmd.indexOf("unlock") >= 0) {
+      Serial.println("[CMD] 'unlock' command received via USB");
       request_unlock();
-    } else if (cmd == "lock" || cmd.indexOf("\"lock\"") >= 0) {
-      Serial.println("[CMD] Commande 'lock' reçue via USB");
+      lcd_show_notification("WEB / CLOUD", "Access Granted");
+    } else if (cmd == "lock" || (cmd.indexOf("lock") >= 0 && cmd.indexOf("lockdown") < 0)) {
+      Serial.println("[CMD] 'lock' command received via USB");
       set_lock_state(LockState::Locked);
+      lcd_show_notification("WEB / CLOUD", "Vault Locked");
+    } else if (cmd == "ack" || cmd.indexOf("ack") >= 0 || cmd == "reset") {
+      Serial.println("[CMD] 'ack' command received via USB");
+      acknowledge_breach();
+      lcd_show_notification("WEB / CLOUD", "Breach Acked");
+    } else if (cmd == "lockdown 1" || cmd == "lockdown on" || cmd == "lockdown:1" || cmd.indexOf("\"lockdown\":true") >= 0 || (cmd.indexOf("lockdown") >= 0 && cmd.indexOf("true") >= 0)) {
+      Serial.println("[CMD] Enabling security lockdown via USB");
+      set_lockdown(true);
+      lcd_show_notification("WEB / CLOUD", "Lockdown ON");
+    } else if (cmd == "lockdown 0" || cmd == "lockdown off" || cmd == "lockdown:0" || cmd.indexOf("\"lockdown\":false") >= 0 || (cmd.indexOf("lockdown") >= 0 && cmd.indexOf("false") >= 0)) {
+      Serial.println("[CMD] Disabling security lockdown via USB");
+      set_lockdown(false);
+      lcd_show_notification("WEB / CLOUD", "Lockdown OFF");
     }
   }
 

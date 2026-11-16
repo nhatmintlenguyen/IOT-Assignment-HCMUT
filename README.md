@@ -23,28 +23,35 @@ For detailed specifications, electrical ratings, voltage compatibility, and anti
 ```
 +--------------------------------------------------------------------------+
 |                          WEARABLE BADGE (Yolo:Bit)                       |
-|  - ESP32 Dual-Core (ESP-NOW 2.4 GHz Transmitter)                         |
-|  - Button A: Instant Wireless Unlock Request                             |
-|  - Button B: Emergency Duress / Panic Silent Alarm                       |
-|  - 5x5 RGB Matrix: Visual Feedback (Checkmark ✔ / Cross ✖ / Lock)        |
-|  - Integrated Buzzer: Audible Confirmation & Warning Tones               |
+|  - ESP32 Dual-Core (ESP-NOW 2.4 GHz Bidirectional Link)                  |
+|  - Button A (Short): Instant Wireless Unlock Request                     |
+|  - Button A (Long >= 1s): Acknowledge Security Breach Alarm              |
+|  - Button B (Short): Manual Vault Lock Request                           |
+|  - Combo A + B: Simulated Rogue / Unauthorized Badge                     |
+|  - 5x5 RGB Matrix: Multi-step Pixel Art Feedback:                        |
+|      ✔ Checkmark | ✖ Cross | 🔓/🔒 Padlocks | ⚠ Warning | ☠ Skull | ⛔ No-Entry |
+|  - Integrated Buzzer: Synthesized Tones, Startup Sweep & Warning Cues    |
 +--------------------------------------------------------------------------+
                                      |
-                                     | ESP-NOW (2.4 GHz P2P Wireless)
+                                     | ESP-NOW (2.4 GHz P2P Bidirectional)
                                      v
 +--------------------------------------------------------------------------+
 |                           VAULT UNIT (YoloUNO - ESP32-S3)                |
-|  Inputs (All Grove Plug-and-Play):                                       |
-|   - DHT20 Temp & Humidity Sensor ------> Grove I2C #1 (Address 0x38)        |
+|  Inputs (All Grove Plug-and-Play with Non-Blocking I/O):                 |
+|   - DHT20 Temp & Humidity Sensor ------> Grove I2C #1 (Address 0x38)     |
 |   - 1602 LCD Display (PCF8574) --------> Grove I2C #2 (Address 0x21 / 0x27) |
-|   - LDR Internal Light Sensor ---------> Grove Analog A1-A0 (Signal A0)     |
+|   - LDR Internal Light Sensor ---------> Grove Analog A1-A0 (Signal A0)  |
 |   - Ultrasonic Distance Sensor --------> Grove Digital D4-D3 (Trig D3, Echo D4) |
-|   - IR Receiver Module (1838) ---------> Grove Digital D6-D5 (Signal D5)    |
-|  Outputs:                                                                |
+|   - IR Receiver Module (1838) ---------> Grove Digital D6-D5 (Signal D5) |
+|  Outputs & Security Logic:                                               |
 |   - Micro Servo (Deadbolt) ------------> Dedicated GVS Header D11 (GPIO 38) |
-|   - Onboard NeoPixel RGB LED ----------> GPIO 45 (1-Wire Addressable)    |
+|   - Onboard NeoPixel RGB LED ----------> GPIO 45 (Strobe/Magenta/Colors) |
 |   - Onboard Status LED (Heartbeat) ----> GPIO 48 (FreeRTOS Watchdog)     |
-|  Network:                                                                |
+|   - Anti-Bruteforce Engine ------------> Automatic Lockdown after 3 Strikes |
+|   - Dynamic PIN Configuration ---------> IR Key 0x15 State Machine       |
+|   - Transient Notification Banners ----> 1.2s LCD Action Banners         |
+|  Network & Cloud Interface:                                              |
+|   - USB Serial Gateway Stream ---------> Telemetry & Bi-directional RPC  |
 |   - Emergency Web Server (T07) --------> HTTP Port 80 (Wi-Fi AP/LAN)     |
 +--------------------------------------------------------------------------+
                                      |
@@ -130,24 +137,64 @@ For detailed specifications, electrical ratings, voltage compatibility, and anti
           (Return to IDLE / Lock)
 ```
 
-### 4.1 Normal Badge Access (ESP-NOW - `T06`)
-1. **Approach**: A technician approaches within 30 cm. The ultrasonic sensor triggers the LCD to backlight and display: `"Welcome. Present Badge or IR PIN"`.
-2. **Transmission**: The technician presses **Button A** on the Yolo:Bit. The badge broadcasts an ESP-NOW payload containing its authorization token.
-3. **Execution**: The YoloUNO validates the token, unlocks the MG90 servo (deadbolt 0°), switches the NeoPixel to **Green**, and sends an unlock log over UART. The Yolo:Bit matrix flashes a **check mark (✔)** and chirps a confirmation tone.
-4. **Auto-Relock**: After 10 seconds, the servo swings back to 90°, the NeoPixel returns to **Solid Red**, and the LCD returns to standby.
+### 4.1 Wearable Smart Badge Access (ESP-NOW - `T06`)
+1. **Approach Detection**: An approaching operator enters the detection cone (< 30 cm) of the ultrasonic sensor. The LCD wakes up from its cycling telemetry and displays: `"WELCOME / Badge or IR PIN"`.
+2. **Instant Wireless Unlock (Button A Short Press)**:
+   * The Yolo:Bit transmits an encrypted ESP-NOW packet (`"UNLOCK"` with anti-replay sequence counter).
+   * YoloUNO validates proximity: if person is near, deadbolt servo rotates to unlocked position (0°), NeoPixel turns **Solid Green**, and LCD pops up `BADGE / Access Granted` for 1.2s before displaying the live 30s unlock countdown (`DOOR UNLOCKED / F: Lock | 30s`).
+   * Yolo:Bit matrix plays a two-stage animation: **Green Checkmark (✔)** (400ms, 1500Hz chime) $\to$ **Green Open Padlock (🔓)** (800ms, 2200Hz chime).
+3. **Manual Lock (Button B Short Press)**:
+   * Sends `"LOCK"` via ESP-NOW. YoloUNO engages the servo deadbolt (90°), and LCD pops up `BADGE / Vault Locked`.
+   * Yolo:Bit displays **Green Checkmark (✔)** $\to$ **Blue Closed Padlock (🔒)** (1100Hz tone).
+4. **Security Breach Acknowledgment (Button A Long Press >= 1.0s)**:
+   * If a security breach alarm is active, holding Button A clears the latched breach and silences alarms. Yolo:Bit displays **Red Warning Triangle (⚠)** $\to$ **Green Checkmark (✔)** with ascending double chime.
+   * If no breach is active, Yolo:Bit immediately displays a **Red Cross (✖)** with a refusal buzz.
+5. **Rogue / Unauthorized Badge Simulation (Combo A + B)**:
+   * Pressing Buttons A and B simultaneously simulates an unauthorized badge (`"FAKE_BADGE"`).
+   * YoloUNO logs `ROGUE_BADGE_DETECTED`, counts a failed attempt, and returns `DENIED_UNAUTHORIZED`.
+   * Yolo:Bit displays a **Red Cross (✖)** $\to$ **Glowing Bone Skull (☠)** with an ominous low warning buzz (320Hz $\to$ 220Hz).
+6. **Auto-Relock Safeguard**: After 30 seconds of inactivity, the deadbolt automatically re-engages and logs an `auto_locked` event.
 
-### 4.2 Backup IR Remote Access
-1. If the technician does not have the badge, they enter a 4-digit PIN (e.g., `1-2-3-4`) on the IR remote.
-2. The IR task on the YoloUNO decodes the NEC pulses in real time, updating the LCD with masked asterisks (`PIN: * * * *`).
-3. If correct, the safe unlocks. If incorrect 3 times, the system enters a 60-second penalty lockout and sends a tamper warning to the Gateway.
+### 4.2 Backup IR Remote Access & In-Field Management
+1. **PIN Code Entry**: 4-digit numeric code via remote control (default factory PIN: `1234`). Keypresses require physical proximity (< 30 cm); remote attempts from a distance display `ACCESS DENIED / Approach first`.
+2. **Full Keypad Mapping**:
+   * `0`–`9` : Digit entry with masked feedback (`* * * _`).
+   * `A` : Backspace last digit / Cancel prompt.
+   * `B` : Clear and acknowledge active security breach alarm (`PIN / IR REMOTE / Breach Acked`).
+   * `C` : Validate entered PIN code.
+   * `D` : Clear entire PIN buffer.
+   * `F` : Immediate manual lock when door is open.
+   * `▲ / ►` : Next LCD telemetry page.
+   * `▼ / ◄` : Previous LCD telemetry page.
+3. **Dynamic PIN Modification (Key 0x15 / Settings)**:
+   * Operators can change the safe PIN directly on-device without reflashing firmware.
+   * Pressing Key `0x15` launches an interactive state machine:
+     1. Prompt: `CHANGE PIN? / C:Yes   A:Cancel`
+     2. Current PIN challenge: `ENTER OLD PIN` (validated against memory).
+     3. New credential definition: `ENTER NEW PIN`.
+     4. Confirmation banner: `PIN CHANGED / Success!`.
 
-### 4.3 Emergency On-Device Web Server (`T07`)
-1. In the event of a gateway failure or for local maintenance, an authorized technician connects directly to the YoloUNO local IP / SoftAP.
-2. A responsive HTTP dashboard (served directly from the ESP32-S3 Flash memory) displays live temperature, humidity, light levels, and provides a manual "Emergency Unlock / Lock" toggle switch.
+### 4.3 Anti-Bruteforce Defense & Vault Lockdown
+* **Strike Counter**: The system monitors consecutive fraudulent access attempts (wrong IR PIN, wrong old PIN during change, or unauthorized rogue badge).
+* **Automatic Lockdown Engagement**: On the **3rd consecutive failure**:
+  * YoloUNO immediately locks down: deadbolt is forced shut, NeoPixel switches to **Solid Magenta**, and LCD displays `VAULT LOCKDOWN / Access Disabled`.
+  * All physical access (IR keypad and smart badges) is strictly suspended.
+  * A critical security alarm is broadcast via UART: `{"type":"alarm","alarm":"bruteforce_detected","action":"lockdown_engaged"}`.
+* **Lockdown Recovery**: Lockdown can only be lifted remotely by an administrator via ThingsBoard Cloud / CoreIOT or through the Gateway serial console (`lockdown:0`).
 
 ### 4.4 Tamper & Intrusion Detection
-* **Physical Forced Entry**: If the safe door is forced open without prior authentication, the internal LDR sensor immediately detects ambient room light while the state machine is in `LOCKED` mode.
-* **Response**: The onboard NeoPixel flashes **Strobe Red**, the LCD warns `"SECURITY BREACH"`, and the Gateway immediately pushes a critical alarm through the CoreIOT RuleChain (`T12`), dispatching a real-time Telegram alert (`T13`).
+* **Physical Forced Entry**: If the safe door is forced open without prior authentication, the internal LDR optical sensor detects ambient room light while in `LOCKED` state.
+* **Instant Alarm & Latching**: The onboard NeoPixel flashes an aggressive **Strobe Red** (80ms cycle), the LCD displays `SECURITY BREACH / Waiting for ACK`, and an alarm frame is pushed over UART.
+* **Tri-Channel Acknowledgment**: The intrusion state remains persistently latched until explicitly acknowledged via:
+  1. Yolo:Bit Badge: Long press Button A (or Button B).
+  2. IR Remote: Key B or authorized PIN entry.
+  3. Cloud / Web: ThingsBoard dashboard button / RPC `ack`.
+
+### 4.5 Transient 1.2s Notification Banners
+Every interaction on the safe triggers a high-visibility, 1.2-second LCD status banner clearly identifying the control channel and action result:
+* **Badge Actions**: `BADGE / Access Granted`, `BADGE / Vault Locked`, `BADGE / Breach Acked`, `ROGUE BADGE / Access Denied`, `BADGE DENIED / Approach first`.
+* **IR Keypad Actions**: `PIN CODE / Access Granted`, `PIN / IR REMOTE / Breach Acked`, `PIN / IR REMOTE / Vault Locked`.
+* **Remote Cloud Actions**: `WEB / CLOUD / Access Granted`, `WEB / CLOUD / Vault Locked`, `WEB / CLOUD / Breach Acked`, `WEB / CLOUD / Lockdown ON/OFF`.
 
 ### 4.5 Edge AI Anomaly Detection (`T09`)
 * The Gateway runs a Python background thread analyzing sliding windows of telemetry (access hour, failed PIN attempts, temperature variations).

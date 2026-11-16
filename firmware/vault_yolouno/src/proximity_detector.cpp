@@ -16,9 +16,9 @@ uint8_t consecutiveAwaySamples = 0;
 ProximityResult update_proximity(float distanceCm, bool readingValid) {
     bool enteredRange = false;
 
-    // Si pas d'écho (hors de portée) ou distance >= seuil de départ -> personne absente
+    // Out of range (no echo) or distance >= leave threshold -> person away
     const bool isAway = (!readingValid || distanceCm >= LEAVE_DISTANCE_CM);
-    // Présence confirmée seulement si mesure valide et < 30 cm
+    // Presence confirmed only if reading is valid and < 30 cm
     const bool isNear = (readingValid && distanceCm > 1.0f && distanceCm < APPROACH_DISTANCE_CM);
 
     if (isNear) {
