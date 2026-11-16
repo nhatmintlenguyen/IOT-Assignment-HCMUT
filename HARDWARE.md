@@ -99,7 +99,33 @@ are not part of these three Grove rows.
 
 ---
 
-## 3. Recommended YoloUNO Pin & Port Mapping
+## 3. Physical Wiring Diagram & Port Mapping
+
+```
+                    +--------------------------------------------------------+
+                    |             YoloUNO Microcontroller (ESP32-S3)         |
+                    |                                                        |
+[Grove Red I2C 1]   --->  DHT20 Climate Sensor (I2C Address 0x38)            |
+[Grove Red I2C 2]   --->  1602 LCD Display (I2C Address 0x21 / 0x27)         |
+                    |                                                        |
+[Grove White D4-D3] --->  Ultrasonic Proximity Sensor                        |
+                    |      - Yellow (Pin 1): Trigger (D3 / GPIO 6)           |
+                    |      - White  (Pin 2): Echo (D4 / GPIO 7)              |
+                    |                                                        |
+[Grove White D6-D5] --->  IR Receiver 1838 Module                            |
+                    |      - Yellow (Pin 1): IR Pulse Capture (D5 / GPIO 8)  |
+                    |                                                        |
+[Grove Yellow A1-A0]--->  LDR Light Sensor (Internal Tamper Detection)      |
+                    |      - Yellow (Pin 1): Analog Voltage (A0 / GPIO 1)    |
+                    |                                                        |
+[3-Pin GVS Header]  --->  Servo Motor Deadbolt (SG90 / MG90)                 |
+  (Row marked D11)  |      - G (Ground) : Brown (or Black) wire              |
+                    |      - V (+5V)    : Red wire                           |
+                    |      - S (Signal) : Orange wire (D11 / GPIO 38)        |
+                    |                                                        |
+[USB Type-C Port]   --->  PC Gateway Bridge (115200 baud USB CDC Serial)     |
+                    +--------------------------------------------------------+
+```
 
 | Peripheral | YoloUNO Port Type | Physical Connector | Address / Signal Pin |
 | :--- | :--- | :--- | :--- |

@@ -35,13 +35,13 @@ For detailed specifications, electrical ratings, voltage compatibility, and anti
 +--------------------------------------------------------------------------+
 |                           VAULT UNIT (YoloUNO - ESP32-S3)                |
 |  Inputs (All Grove Plug-and-Play):                                       |
-|   - DHT20 Temp & Humidity Sensor ------> Grove I2C (Address 0x38)        |
-|   - 1602 LCD Display (PCF8574) --------> Grove I2C (Address 0x27 / 0x3F) |
-|   - LDR Internal Light Sensor ---------> Grove Analog (A0 / ADC1)        |
-|   - Ultrasonic Distance Sensor --------> Grove Digital (D2)              |
-|   - IR Receiver Module (1838) ---------> Grove Digital (D4)              |
+|   - DHT20 Temp & Humidity Sensor ------> Grove I2C #1 (Address 0x38)        |
+|   - 1602 LCD Display (PCF8574) --------> Grove I2C #2 (Address 0x21 / 0x27) |
+|   - LDR Internal Light Sensor ---------> Grove Analog A1-A0 (Signal A0)     |
+|   - Ultrasonic Distance Sensor --------> Grove Digital D4-D3 (Trig D3, Echo D4) |
+|   - IR Receiver Module (1838) ---------> Grove Digital D6-D5 (Signal D5)    |
 |  Outputs:                                                                |
-|   - MG90 Micro Servo (Deadbolt) -------> Dedicated GVS Header (PWM LEDC) |
+|   - Micro Servo (Deadbolt) ------------> Dedicated GVS Header D11 (GPIO 38) |
 |   - Onboard NeoPixel RGB LED ----------> GPIO 45 (1-Wire Addressable)    |
 |   - Onboard Status LED (Heartbeat) ----> GPIO 48 (FreeRTOS Watchdog)     |
 |  Network:                                                                |

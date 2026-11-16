@@ -8,7 +8,7 @@ constexpr int LIGHT_BREACH_THRESHOLD = 1200;
 constexpr int LIGHT_BREACH_RESET_THRESHOLD = 800;
 constexpr uint8_t REQUIRED_BRIGHT_SAMPLES = 3;
 constexpr uint32_t AUTO_RELOCK_DURATION_MS = 10000;  // 10s auto-relock per requirements
-constexpr uint32_t STANDBY_DURATION_MS = 20000;      // 20s approach standby window
+constexpr uint32_t STANDBY_DURATION_MS = 10000;      // 10s approach standby window
 
 LockState lockState = LockState::Locked;
 bool breachActive = false;

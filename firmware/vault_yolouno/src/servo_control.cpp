@@ -5,9 +5,9 @@ namespace {
 // YoloUNO GVS header D11 maps to GPIO 38
 constexpr int SERVO_PIN = 38;
 
-// Calibrated safe angles to prevent motor stall and brownout resets
-constexpr int ANGLE_LOCKED = 75;
-constexpr int ANGLE_UNLOCKED = 15;
+// Calibrated 180-degree sweep for full mechanical travel
+constexpr int ANGLE_LOCKED = 180;
+constexpr int ANGLE_UNLOCKED = 0;
 
 Servo deadbolt;
 }

@@ -1,6 +1,7 @@
 #include "ir_reader.h"
 #include "ir_remote_keys.h"
 #include "vault_state.h"
+#include "lcd_display.h"
 
 // Grove socket D6-D5 maps: D5 = GPIO 8, D6 = GPIO 9.
 // Grove 1-signal modules use Pin 1 (Yellow) = D5 = GPIO 8.
@@ -74,7 +75,18 @@ void ir_reader_tick() {
                 pinBuffer[0] = '\0';
                 Serial.println("{\"type\":\"event\",\"source\":\"ir_pin\",\"action\":\"cleared\"}");
             }
-            // 4. Autre touche non gérée
+            // 4. Touches flèches : navigation manuelle dans les pages LCD
+            else if (command == IR_KEY_RIGHT || command == IR_KEY_UP) {
+                lcd_display_next_page();
+                trigger_approach_standby(); // Prolonge le délai d'attente de 20s
+                Serial.println("{\"type\":\"event\",\"source\":\"ir_nav\",\"action\":\"next_page\"}");
+            }
+            else if (command == IR_KEY_LEFT || command == IR_KEY_DOWN) {
+                lcd_display_prev_page();
+                trigger_approach_standby(); // Prolonge le délai d'attente de 20s
+                Serial.println("{\"type\":\"event\",\"source\":\"ir_nav\",\"action\":\"prev_page\"}");
+            }
+            // 5. Autre touche non gérée
             else {
                 Serial.printf("{\"type\":\"event\",\"source\":\"ir_remote\",\"key\":\"%c\",\"cmd\":\"0x%02X\"}\n",
                               key ? key : '?', command);

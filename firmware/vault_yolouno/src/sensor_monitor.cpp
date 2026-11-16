@@ -81,10 +81,12 @@ void task_sensor_monitor(void *pvParameters) {
             set_proximity_reading(distanceCm, distanceValid, proximity.personNear);
 
             const VaultStatus status = get_vault_status();
-            if (proximity.enteredRange && status.lockState == LockState::Locked) {
+            if (proximity.personNear && status.lockState == LockState::Locked) {
                 trigger_approach_standby();
+            }
+            if (proximity.enteredRange && status.lockState == LockState::Locked) {
                 Serial.printf(
-                    "{\"type\":\"event\",\"event\":\"approach\",\"distance_cm\":%.1f,\"state\":\"LOCKED\",\"standby_sec\":20}\n",
+                    "{\"type\":\"event\",\"event\":\"approach\",\"distance_cm\":%.1f,\"state\":\"LOCKED\",\"standby_sec\":10}\n",
                     distanceCm);
             }
         }
