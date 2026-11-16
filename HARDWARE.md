@@ -13,6 +13,22 @@ This document details all physical hardware components provided in the **OhStem 
 | **YoloUNO** | **ESP32-S3 Dual-Core Xtensa LX7 @ 240 MHz**<br>• 512 KB SRAM, 8 MB Flash<br>• Wi-Fi 2.4 GHz (802.11 b/g/n) + BLE 5.0<br>• Arduino Uno R3 form factor with **12 onboard Grove connectors**<br>• 4 dedicated GVS servo headers, native USB Type-C, 7–12V DC power jack | **Central Vault Controller (Vault Unit)**: Sensor acquisition, access authentication, deadbolt servo actuation, serial Gateway communication, and embedded emergency Web Server. |
 | **Yolo:Bit** | **ESP32 Dual-Core**<br>• 5×5 programmable RGB LED Matrix (25 addressable pixels)<br>• 2 tactile pushbuttons (Button A and B)<br>• Integrated piezoelectric buzzer<br>• 3-axis accelerometer / gyroscope<br>• Powered via 2× AAA battery pack (3V) or USB Type-C | **Wearable Security Badge**: Wireless access requests via ESP-NOW (Button A) or silent duress / panic alarms (Button B), with real-time audio and visual status feedback. |
 
+#### YoloUNO Grove slot rows
+
+The 12 Grove sockets are grouped by interface type. The color identifies the
+row's function; it is not a voltage-level indicator:
+
+| Row color | Interface | Board labels | Typical use |
+| :---: | :--- | :--- | :--- |
+| **Yellow** | Analog | `A6-A3`, `A3-A2`, `A2-A1`, `A1-A0` | Sensors that provide an analog voltage, such as an LDR or soil-moisture sensor. |
+| **White** | Digital | `D10-D9`, `D8-D7`, `D6-D5`, `D4-D3` | Digital input/output modules, including the ultrasonic sensor and IR receiver. |
+| **Red** | I²C | `I2C4`, `I2C3`, `I2C2`, `I2C1` | Devices sharing the I²C bus, such as the DHT20 and LCD. Multiple devices can share a row when their addresses differ. |
+
+This color coding is specific to the socket group. A Grove cable still uses
+the standard four conductors: yellow and white for signals, red for VCC, and
+black for GND. The four separate 3-pin GVS headers are intended for servos and
+are not part of these three Grove rows.
+
 ---
 
 ### 1.2 Available Sensors
@@ -20,9 +36,9 @@ This document details all physical hardware components provided in the **OhStem 
 | Sensor | Interface & Grove Port | Role in Secure Vault | Status |
 | :--- | :--- | :--- | :---: |
 | **DHT20** | **I2C** (Address `0x38`) — Grove I2C Port | Continuous internal climate telemetry (temperature and humidity monitoring for fire prevention and environmental control). | **Selected** |
-| **Light Sensor (LDR)** | **Analog** — Grove Port A0 | Installed inside the vault interior. Detects unauthorized physical breaches by sensing ambient light while in `LOCKED` state. | **Selected** |
-| **Ultrasonic Distance Sensor** | **Digital** — Grove Port D2 | Measures technician approach distance (< 30 cm) to wake up the standby LCD screen. | **Selected** |
-| **IR Receiver (1838)** | **Digital** — Grove Port D4 | Captures 38 kHz NEC infrared pulses from the remote control for backup 4-digit PIN authentication. | **Selected** |
+| **Light Sensor (LDR)** | **Analog** — Grove Port A1-A0 | Installed inside the vault interior. Detects unauthorized physical breaches by sensing ambient light while in `LOCKED` state. | **Selected** |
+| **Ultrasonic Distance Sensor** | **Digital** — Grove Port D6-D5 | Measures technician approach distance (< 30 cm) to wake up the standby LCD screen. | **Selected** |
+| **IR Receiver (1838)** | **Digital** — Grove Port D4-D3 | Captures 38 kHz NEC infrared pulses from the remote control for backup 4-digit PIN authentication. | **Selected** |
 | **PIR Motion Sensor** | Digital — Grove Port | Passive infrared volumetric human motion detection. | *Spare / Optional* |
 | **Soil Moisture Sensor** | Analog — Grove Port | Targeted for smart agriculture projects. | *Not Used* |
 
@@ -78,7 +94,7 @@ This document details all physical hardware components provided in the **OhStem 
 * **On the YoloUNO Board:**
   * The board features **12 keyed Grove connectors** and **4 dedicated 3-pin GVS headers**.
   * Every peripheral utilizes a secure, keyed latching cable.
-  * There are **zero pin collisions** (I2C peripherals share the bus under distinct hardware addresses `0x38` and `0x27`, ADC utilizes A0, IR utilizes D4, and the servo connects to GVS).
+  * There are **zero pin collisions** (I2C peripherals share the bus under distinct hardware addresses `0x38` and `0x27`, the LDR utilizes the analog `A1-A0` Grove port, the IR receiver utilizes the digital `D4-D3` Grove port, and the servo uses GVS signal `D11`).
 * **Verdict:** The planned peripheral count is **fully feasible, stable, and clean**. It provides an impressive physical setup with zero risk of loose wires during presentation.
 
 ---
@@ -89,10 +105,11 @@ This document details all physical hardware components provided in the **OhStem 
 | :--- | :--- | :--- | :--- |
 | **DHT20 Climate Sensor** | Grove I2C | Grove Port I2C #1 | I2C Bus (`0x38`) |
 | **1602 LCD Display** | Grove I2C | Grove Port I2C #2 (or daisy-chained) | I2C Bus (`0x27` or `0x3F`) |
-| **Light Sensor (LDR)** | Grove Analog | Grove Port A0 | ADC1 Channel (GPIO 1) |
-| **Ultrasonic Distance Sensor** | Grove Digital | Grove Port D2 | Dedicated Digital GPIO (Trig/Echo) |
-| **IR Receiver (1838)** | Grove Digital | Grove Port D4 | Dedicated Digital GPIO (IR Capture) |
-| **MG90 Servomotor** | 3-Pin GVS Header | Servo Header #1 | Dedicated LEDC PWM (50 Hz) |
+| **Light Sensor (LDR)** | Grove Analog | Grove Port A1-A0 | ADC1 Channel (GPIO 1) |
+| **Ultrasonic Distance Sensor** | Grove Digital | Grove Port D6-D5 | Dedicated Digital GPIO (Trig/Echo) |
+| **IR Receiver (1838)** | Grove Digital | Grove Port D4-D3 | Dedicated Digital GPIO (IR Capture) |
+| **MG90 Servomotor** | 3-Pin GVS Header | Servo signal header | D11, dedicated LEDC PWM (50 Hz) |
+| **Yolo:Bit** | Wireless | ESP-NOW link | Button and status messages |
 | **Onboard NeoPixel** | Internal PCB Circuit | Fixed Internal Route | GPIO 45 |
 | **Onboard Heartbeat LED** | Internal PCB Circuit | Fixed Internal Route | GPIO 48 |
 | **PC Gateway Bridge** | USB Type-C Cable | USB-C Port | CDC UART @ 115200 baud |
