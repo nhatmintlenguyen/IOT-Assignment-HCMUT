@@ -7,6 +7,7 @@
 #include "sensor_snapshot.h"
 #include "vault_state.h"
 #include "servo_control.h"
+#include "ir_reader.h"
 
 #define NEO_PIN 45
 #define LED_COUNT 1
@@ -129,6 +130,9 @@ void setup() {
   // Initialisation du servomoteur (verrouillé par défaut à 75°)
   servo_control_init();
 
+  // Initialisation du récepteur IR (Grove D6-D5, pin D5 = GPIO 8)
+  ir_reader_init();
+
   // Initialisation ESP-NOW
   WiFi.mode(WIFI_STA);
   Serial.print("[INFO] YoloUNO MAC: ");
@@ -151,6 +155,9 @@ void setup() {
 void loop() {
   // 1. Tick de la machine à état (gestion du reverrouillage auto après 10s)
   vault_state_tick();
+
+  // 2. Décodage infrarouge de la télécommande
+  ir_reader_tick();
 
   // 2. Écoute des commandes reçues sur le port série USB (Gateway ou test manuel)
   if (Serial.available()) {

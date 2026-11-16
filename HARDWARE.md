@@ -103,13 +103,43 @@ are not part of these three Grove rows.
 
 | Peripheral | YoloUNO Port Type | Physical Connector | Address / Signal Pin |
 | :--- | :--- | :--- | :--- |
-| **DHT20 Climate Sensor** | Grove I2C | Grove Port I2C #1 | I2C Bus (`0x38`) |
-| **1602 LCD Display** | Grove I2C | Grove Port I2C #2 (or daisy-chained) | I2C Bus (`0x27` or `0x3F`) |
-| **Light Sensor (LDR)** | Grove Analog | Grove Port A1-A0 | ADC1 Channel (GPIO 1) |
-| **Ultrasonic Distance Sensor** | Grove Digital | Grove Port D6-D5 | Dedicated Digital GPIO (Trig/Echo) |
-| **IR Receiver (1838)** | Grove Digital | Grove Port D4-D3 | Dedicated Digital GPIO (IR Capture) |
-| **MG90 Servomotor** | 3-Pin GVS Header | Servo signal header | D11, dedicated LEDC PWM (50 Hz) |
+| **DHT20 Climate Sensor** | Grove I2C | Grove Port I2C #1 | I2C Bus (`0x38`), SDA=GPIO 11, SCL=GPIO 12 |
+| **1602 LCD Display** | Grove I2C | Grove Port I2C #2 (or daisy-chained) | I2C Bus (`0x21` / `0x27` / `0x3F`), SDA=GPIO 11, SCL=GPIO 12 |
+| **Light Sensor (LDR)** | Grove Analog | Grove Port A1-A0 | ADC1 Channel (GPIO 1 / A0) |
+| **Ultrasonic Distance Sensor** | Grove Digital | Grove Port D4-D3 | Trig = GPIO 6 (D3), Echo = GPIO 7 (D4) |
+| **IR Receiver (1838)** | Grove Digital | Grove Port D6-D5 | IR Capture Signal = GPIO 8 (D5) |
+| **Servo Motor (SG90/MG90)** | 3-Pin GVS Header | Dedicated GVS Header | D11 (GPIO 38), LEDC PWM (50 Hz) |
 | **Yolo:Bit** | Wireless | ESP-NOW link | Button and status messages |
 | **Onboard NeoPixel** | Internal PCB Circuit | Fixed Internal Route | GPIO 45 |
 | **Onboard Heartbeat LED** | Internal PCB Circuit | Fixed Internal Route | GPIO 48 |
 | **PC Gateway Bridge** | USB Type-C Cable | USB-C Port | CDC UART @ 115200 baud |
+
+---
+
+## 4. Handheld IR Remote Keypad Mapping (NEC Protocol)
+
+The handheld infrared remote communicates using the standard 38 kHz NEC protocol. The mapping table below was captured from real hardware. Programmatic definitions are in [`firmware/vault_yolouno/include/ir_remote_keys.h`](file:///mnt/Data/Documents/Scolarité/6-HCMUT/261/CO3037 - Internet Of Things Development/Assignment/IOT-Assignment-HCMUT/firmware/vault_yolouno/include/ir_remote_keys.h).
+
+| Remote Button | Command (Hex) | Raw 32-bit Code | Functional Role in Vault System |
+| :---: | :---: | :---: | :--- |
+| **0** | `0x16` | `0xE916FF00` | Numeric PIN entry digit 0 |
+| **1** | `0x0C` | `0xF30CFF00` | Numeric PIN entry digit 1 |
+| **2** | `0x18` | `0xE718FF00` | Numeric PIN entry digit 2 |
+| **3** | `0x5E` | `0xA15EFF00` | Numeric PIN entry digit 3 |
+| **4** | `0x08` | `0xF708FF00` | Numeric PIN entry digit 4 |
+| **5** | `0x1C` | `0xE31CFF00` | Numeric PIN entry digit 5 |
+| **6** | `0x5A` | `0xA55AFF00` | Numeric PIN entry digit 6 |
+| **7** | `0x42` | `0xBD42FF00` | Numeric PIN entry digit 7 |
+| **8** | `0x52` | `0xAD52FF00` | Numeric PIN entry digit 8 |
+| **9** | `0x4A` | `0xB54AFF00` | Numeric PIN entry digit 9 |
+| **A** | `0x45` | `0xBA45FF00` | Auxiliary key A |
+| **B** | `0x46` | `0xB946FF00` | Auxiliary key B |
+| **C** | `0x47` | `0xB847FF00` | **Validate / Enter (Submit 4-digit PIN)** |
+| **D** | `0x44` | `0xBB44FF00` | **Clear / Reset current PIN buffer** |
+| **E** | `0x43` | `0xBC43FF00` | Auxiliary key E |
+| **F** | `0x0D` | `0xF20DFF00` | Auxiliary key F |
+| **Up Arrow** | `0x40` | `0xBF40FF00` | Navigation up |
+| **Down Arrow** | `0x19` | `0xE619FF00` | Navigation down |
+| **Left Arrow** | `0x07` | `0xF807FF00` | Navigation left |
+| **Right Arrow** | `0x09` | `0xF609FF00` | Navigation right |
+| **Settings** | `0x15` | `0xEA15FF00` | Configuration / Menu |

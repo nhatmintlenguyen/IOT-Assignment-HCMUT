@@ -1,12 +1,13 @@
 #include "lcd_display.h"
 #include "LiquidCrystal_I2C.h"
+#include "ir_reader.h"
 
 namespace {
 // Address 33 (0x21) is retained from the existing firmware. Confirm with an I2C scan
 // if the display has a backlight but does not show characters.
 LiquidCrystal_I2C lcd(33, 16, 2);
 constexpr uint32_t PAGE_DURATION_MS = 3000;
-constexpr uint32_t DISPLAY_REFRESH_INTERVAL_MS = 500;
+constexpr uint32_t DISPLAY_REFRESH_INTERVAL_MS = 200;
 uint8_t currentPage = 0;
 uint32_t lastPageChangeMs = 0;
 uint32_t lastDisplayUpdateMs = 0;
@@ -54,7 +55,25 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
         return;
     }
 
-    if (status.lockState == LockState::Locked && sensors.personNear) {
+    if (ir_reader_is_pin_error()) {
+        print_padded_line(0, "PIN INCORRECT");
+        print_padded_line(1, "Try again");
+        return;
+    }
+
+    const uint8_t pinCount = ir_reader_get_pin_count();
+    if (pinCount > 0 && status.lockState == LockState::Locked) {
+        print_padded_line(0, "ENTER PIN (C=OK)");
+        char pinDisplay[17] = "";
+        for (int i = 0; i < 4; i++) {
+            if (i < pinCount) strcat(pinDisplay, "* ");
+            else strcat(pinDisplay, "_ ");
+        }
+        print_padded_line(1, pinDisplay);
+        return;
+    }
+
+    if (status.lockState == LockState::Locked && (status.standbyActive || sensors.personNear)) {
         print_padded_line(0, "Welcome");
         print_padded_line(1, "Badge or IR PIN");
         return;

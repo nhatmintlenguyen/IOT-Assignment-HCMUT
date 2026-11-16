@@ -13,8 +13,8 @@ namespace {
 constexpr uint8_t LIGHT_SENSOR_PIN = 1; // YoloUNO analog A0 maps to GPIO1.
 constexpr uint8_t ULTRASONIC_TRIG_PIN = 6; // YoloUNO Grove D3 maps to GPIO6 (Trigger).
 constexpr uint8_t ULTRASONIC_ECHO_PIN = 7; // YoloUNO Grove D4 maps to GPIO7 (Echo).
-constexpr uint32_t LIGHT_SAMPLE_INTERVAL_MS = 500;
-constexpr uint32_t DISTANCE_SAMPLE_INTERVAL_MS = 500;
+constexpr uint32_t LIGHT_SAMPLE_INTERVAL_MS = 200;
+constexpr uint32_t DISTANCE_SAMPLE_INTERVAL_MS = 200;
 constexpr uint32_t CLIMATE_SAMPLE_INTERVAL_MS = 5000;
 constexpr uint32_t ULTRASONIC_ECHO_TIMEOUT_US = 25000;
 constexpr float MAX_TEMP_JUMP_C = 1.5f;
@@ -82,8 +82,9 @@ void task_sensor_monitor(void *pvParameters) {
 
             const VaultStatus status = get_vault_status();
             if (proximity.enteredRange && status.lockState == LockState::Locked) {
+                trigger_approach_standby();
                 Serial.printf(
-                    "{\"type\":\"event\",\"event\":\"approach\",\"distance_cm\":%.1f,\"state\":\"LOCKED\"}\n",
+                    "{\"type\":\"event\",\"event\":\"approach\",\"distance_cm\":%.1f,\"state\":\"LOCKED\",\"standby_sec\":20}\n",
                     distanceCm);
             }
         }
