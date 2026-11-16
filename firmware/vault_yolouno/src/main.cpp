@@ -88,11 +88,14 @@ void task_telemetry_uart(void *pvParameters) {
     const SensorSnapshot sensors = get_sensor_snapshot();
     const VaultStatus status = get_vault_status();
     Serial.printf(
-        "{\"type\":\"telemetry\",\"temp\":%.2f,\"hum\":%.2f,\"climate_valid\":%s,\"light_adc\":%d,\"state\":\"%s\",\"breach\":%s}\n",
+        "{\"type\":\"telemetry\",\"temp\":%.2f,\"hum\":%.2f,\"climate_valid\":%s,\"light_adc\":%d,\"distance_cm\":%.1f,\"distance_valid\":%s,\"person_near\":%s,\"state\":\"%s\",\"breach\":%s}\n",
         sensors.temperatureC,
         sensors.humidityPct,
         sensors.climateValid ? "true" : "false",
         sensors.lightAdc,
+        sensors.distanceCm,
+        sensors.distanceValid ? "true" : "false",
+        sensors.personNear ? "true" : "false",
         status.lockState == LockState::Locked ? "LOCKED" : "UNLOCKED",
         status.breachActive ? "true" : "false");
     vTaskDelay(pdMS_TO_TICKS(2000));

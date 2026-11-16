@@ -28,3 +28,13 @@ void set_light_reading(int lightAdc) {
     currentSnapshot.lightAdc = lightAdc;
     portEXIT_CRITICAL(&snapshotMux);
 }
+
+void set_proximity_reading(float distanceCm, bool valid, bool personNear) {
+    portENTER_CRITICAL(&snapshotMux);
+    currentSnapshot.distanceValid = valid;
+    currentSnapshot.personNear = personNear;
+    if (valid) {
+        currentSnapshot.distanceCm = distanceCm;
+    }
+    portEXIT_CRITICAL(&snapshotMux);
+}

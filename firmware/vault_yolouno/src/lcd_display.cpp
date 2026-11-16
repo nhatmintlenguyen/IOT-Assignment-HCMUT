@@ -33,7 +33,7 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
     const uint32_t now = millis();
     bool pageChanged = false;
     if (now - lastPageChangeMs >= PAGE_DURATION_MS) {
-        currentPage = (currentPage + 1) % 2;
+        currentPage = (currentPage + 1) % 3;
         lastPageChangeMs = now;
         pageChanged = true;
     }
@@ -41,6 +41,18 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
         return;
     }
     lastDisplayUpdateMs = now;
+
+    if (status.breachActive) {
+        print_padded_line(0, "SECURITY BREACH");
+        print_padded_line(1, "Check enclosure");
+        return;
+    }
+
+    if (status.lockState == LockState::Locked && sensors.personNear) {
+        print_padded_line(0, "Welcome");
+        print_padded_line(1, "Badge or IR PIN");
+        return;
+    }
 
     if (currentPage == 0) {
         if (sensors.climateValid) {
@@ -56,12 +68,20 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
         return;
     }
 
-    char line[17];
-    snprintf(line, sizeof(line), "Light: %d ADC", sensors.lightAdc);
-    print_padded_line(0, line);
-    if (status.breachActive) {
-        print_padded_line(1, "SECURITY BREACH");
-    } else {
+    if (currentPage == 1) {
+        char line[17];
+        snprintf(line, sizeof(line), "Light: %d ADC", sensors.lightAdc);
+        print_padded_line(0, line);
         print_padded_line(1, status.lockState == LockState::Locked ? "State: LOCKED" : "State: UNLOCKED");
+        return;
     }
+
+    char line[17];
+    if (sensors.distanceValid) {
+        snprintf(line, sizeof(line), "Distance: %.1fcm", sensors.distanceCm);
+    } else {
+        snprintf(line, sizeof(line), "Distance: --.-cm");
+    }
+    print_padded_line(0, line);
+    print_padded_line(1, sensors.personNear ? "Person: NEAR" : "Person: away");
 }

@@ -5,17 +5,39 @@
 
 #include "DHT20.h"
 #include "lcd_display.h"
+#include "proximity_detector.h"
 #include "sensor_snapshot.h"
 #include "vault_state.h"
 
 namespace {
 constexpr uint8_t LIGHT_SENSOR_PIN = 1; // YoloUNO analog A0 maps to GPIO1.
+constexpr uint8_t ULTRASONIC_TRIG_PIN = 6; // YoloUNO Grove D3 maps to GPIO6 (Trigger).
+constexpr uint8_t ULTRASONIC_ECHO_PIN = 7; // YoloUNO Grove D4 maps to GPIO7 (Echo).
 constexpr uint32_t LIGHT_SAMPLE_INTERVAL_MS = 500;
+constexpr uint32_t DISTANCE_SAMPLE_INTERVAL_MS = 500;
 constexpr uint32_t CLIMATE_SAMPLE_INTERVAL_MS = 5000;
+constexpr uint32_t ULTRASONIC_ECHO_TIMEOUT_US = 25000;
 constexpr float MAX_TEMP_JUMP_C = 1.5f;
 constexpr float MAX_HUMIDITY_JUMP_PCT = 5.0f;
 
 DHT20 dht20;
+
+float read_distance_cm(bool& readingValid) {
+    digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
+    delayMicroseconds(2);
+    digitalWrite(ULTRASONIC_TRIG_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
+
+    const uint32_t echoDurationUs = pulseIn(
+        ULTRASONIC_ECHO_PIN, HIGH, ULTRASONIC_ECHO_TIMEOUT_US);
+    readingValid = echoDurationUs > 0;
+    if (!readingValid) {
+        return 0.0f;
+    }
+
+    return static_cast<float>(echoDurationUs) * 0.0343f / 2.0f;
+}
 }
 
 void task_sensor_monitor(void *pvParameters) {
@@ -23,6 +45,9 @@ void task_sensor_monitor(void *pvParameters) {
 
     Wire.begin(11, 12);
     pinMode(LIGHT_SENSOR_PIN, INPUT);
+    pinMode(ULTRASONIC_TRIG_PIN, OUTPUT);
+    pinMode(ULTRASONIC_ECHO_PIN, INPUT);
+    digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
     dht20.begin();
     lcd_display_begin();
 
@@ -31,6 +56,7 @@ void task_sensor_monitor(void *pvParameters) {
     float lastHumidityPct = 0.0f;
     uint32_t lastClimateSampleMs = millis() - CLIMATE_SAMPLE_INTERVAL_MS;
     uint32_t lastLightSampleMs = millis() - LIGHT_SAMPLE_INTERVAL_MS;
+    uint32_t lastDistanceSampleMs = millis() - DISTANCE_SAMPLE_INTERVAL_MS;
 
     while (true) {
         const uint32_t now = millis();
@@ -44,6 +70,30 @@ void task_sensor_monitor(void *pvParameters) {
                 Serial.printf(
                     "{\"type\":\"event\",\"event\":\"breach\",\"source\":\"ldr\",\"light_adc\":%d,\"state\":\"LOCKED\"}\n",
                     lightAdc);
+            }
+        }
+
+        if (now - lastDistanceSampleMs >= DISTANCE_SAMPLE_INTERVAL_MS) {
+            lastDistanceSampleMs = now;
+            bool distanceValid = false;
+            const float distanceCm = read_distance_cm(distanceValid);
+            const ProximityResult proximity = update_proximity(distanceCm, distanceValid);
+            set_proximity_reading(distanceCm, distanceValid, proximity.personNear);
+
+            if (distanceValid) {
+                Serial.printf(
+                    "[ULTRASONIC] distance=%.1f cm, person_near=%s\n",
+                    distanceCm,
+                    proximity.personNear ? "true" : "false");
+            } else {
+                Serial.println("[ULTRASONIC] no Echo received");
+            }
+
+            const VaultStatus status = get_vault_status();
+            if (proximity.enteredRange && status.lockState == LockState::Locked) {
+                Serial.printf(
+                    "{\"type\":\"event\",\"event\":\"approach\",\"distance_cm\":%.1f,\"state\":\"LOCKED\"}\n",
+                    distanceCm);
             }
         }
 
