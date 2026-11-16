@@ -48,6 +48,12 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
         return;
     }
 
+    if (status.lockState == LockState::Unlocked) {
+        print_padded_line(0, "DOOR UNLOCKED");
+        print_padded_line(1, "Auto-lock in 10s");
+        return;
+    }
+
     if (status.lockState == LockState::Locked && sensors.personNear) {
         print_padded_line(0, "Welcome");
         print_padded_line(1, "Badge or IR PIN");

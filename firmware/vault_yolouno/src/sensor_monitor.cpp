@@ -80,15 +80,6 @@ void task_sensor_monitor(void *pvParameters) {
             const ProximityResult proximity = update_proximity(distanceCm, distanceValid);
             set_proximity_reading(distanceCm, distanceValid, proximity.personNear);
 
-            if (distanceValid) {
-                Serial.printf(
-                    "[ULTRASONIC] distance=%.1f cm, person_near=%s\n",
-                    distanceCm,
-                    proximity.personNear ? "true" : "false");
-            } else {
-                Serial.println("[ULTRASONIC] no Echo received");
-            }
-
             const VaultStatus status = get_vault_status();
             if (proximity.enteredRange && status.lockState == LockState::Locked) {
                 Serial.printf(
@@ -128,8 +119,6 @@ void task_sensor_monitor(void *pvParameters) {
                     lastHumidityPct = humidityPct;
                     haveClimateReference = true;
                     set_climate_reading(temperatureC, humidityPct, true);
-                    Serial.printf("Humidity: %.2f%%  Temperature: %.2f C\n",
-                                  humidityPct, temperatureC);
                 }
             }
         }

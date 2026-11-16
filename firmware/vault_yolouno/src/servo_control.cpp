@@ -1,0 +1,27 @@
+#include "servo_control.h"
+#include <ESP32Servo.h>
+
+namespace {
+// YoloUNO GVS header D11 maps to GPIO 38
+constexpr int SERVO_PIN = 38;
+
+// Calibrated safe angles to prevent motor stall and brownout resets
+constexpr int ANGLE_LOCKED = 75;
+constexpr int ANGLE_UNLOCKED = 15;
+
+Servo deadbolt;
+}
+
+void servo_control_init() {
+    deadbolt.setPeriodHertz(50); // 50 Hz standard servo PWM
+    deadbolt.attach(SERVO_PIN, 500, 2500);
+    deadbolt.write(ANGLE_LOCKED);
+}
+
+void servo_set_locked() {
+    deadbolt.write(ANGLE_LOCKED);
+}
+
+void servo_set_unlocked() {
+    deadbolt.write(ANGLE_UNLOCKED);
+}

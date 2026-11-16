@@ -6,6 +6,7 @@
 #include "sensor_monitor.h"
 #include "sensor_snapshot.h"
 #include "vault_state.h"
+#include "servo_control.h"
 
 #define NEO_PIN 45
 #define LED_COUNT 1
@@ -26,6 +27,10 @@ void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
         memcpy(&incomingBadgeMsg, data, sizeof(incomingBadgeMsg));
         Serial.printf("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"%s\",\"counter\":%lu}\n",
                       incomingBadgeMsg.cmd, (unsigned long)incomingBadgeMsg.counter);
+
+        if (strcmp(incomingBadgeMsg.cmd, "UNLOCK") == 0) {
+            request_unlock();
+        }
     }
 }
 
@@ -39,6 +44,7 @@ void task_neopixel(void *pvParameters) {
     const SensorSnapshot sensors = get_sensor_snapshot();
     const VaultStatus status = get_vault_status();
 
+    // 1. Alerte intrusion : rouge stroboscopique
     if (status.breachActive) {
       strip.setPixelColor(0, strip.Color(255, 0, 0));
       strip.show();
@@ -49,6 +55,15 @@ void task_neopixel(void *pvParameters) {
       continue;
     }
 
+    // 2. Coffre déverrouillé : vert continu
+    if (status.lockState == LockState::Unlocked) {
+      strip.setPixelColor(0, strip.Color(0, 255, 0)); // Vert
+      strip.show();
+      vTaskDelay(pdMS_TO_TICKS(500));
+      continue;
+    }
+
+    // 3. Erreur capteur : jaune clignotant
     if (!sensors.climateValid) {
       strip.setPixelColor(0, strip.Color(255, 255, 0));
       strip.show();
@@ -59,12 +74,13 @@ void task_neopixel(void *pvParameters) {
       continue;
     }
 
+    // 4. État verrouillé normal : bleu / cyan / rouge selon température
     if (sensors.temperatureC < 20.0f) {
-      strip.setPixelColor(0, strip.Color(0, 0, 255)); // Blue
+      strip.setPixelColor(0, strip.Color(0, 0, 255)); // Bleu
     } else if (sensors.temperatureC < 28.0f) {
-      strip.setPixelColor(0, strip.Color(0, 255, 0)); // Green
+      strip.setPixelColor(0, strip.Color(0, 150, 150)); // Cyan
     } else {
-      strip.setPixelColor(0, strip.Color(255, 0, 0)); // Red
+      strip.setPixelColor(0, strip.Color(255, 0, 0)); // Rouge chaud
     }
 
     strip.show();
@@ -110,6 +126,9 @@ void setup() {
   Serial.println("  Smart Safe Guardian - YoloUNO (Vault)");
   Serial.println("==========================================");
 
+  // Initialisation du servomoteur (verrouillé par défaut à 75°)
+  servo_control_init();
+
   // Initialisation ESP-NOW
   WiFi.mode(WIFI_STA);
   Serial.print("[INFO] YoloUNO MAC: ");
@@ -130,6 +149,21 @@ void setup() {
 }
 
 void loop() {
-  // FreeRTOS gère toutes les tâches
-  vTaskDelay(pdMS_TO_TICKS(1000));
+  // 1. Tick de la machine à état (gestion du reverrouillage auto après 10s)
+  vault_state_tick();
+
+  // 2. Écoute des commandes reçues sur le port série USB (Gateway ou test manuel)
+  if (Serial.available()) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    if (cmd == "unlock" || cmd.indexOf("\"unlock\"") >= 0) {
+      Serial.println("[CMD] Commande 'unlock' reçue via USB");
+      request_unlock();
+    } else if (cmd == "lock" || cmd.indexOf("\"lock\"") >= 0) {
+      Serial.println("[CMD] Commande 'lock' reçue via USB");
+      set_lock_state(LockState::Locked);
+    }
+  }
+
+  delay(50);
 }
