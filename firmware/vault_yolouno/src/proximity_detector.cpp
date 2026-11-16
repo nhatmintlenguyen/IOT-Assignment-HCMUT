@@ -4,7 +4,7 @@
 
 namespace {
 constexpr float APPROACH_DISTANCE_CM = 30.0f;
-constexpr float LEAVE_DISTANCE_CM = 5.0f;
+constexpr float LEAVE_DISTANCE_CM = 35.0f;
 constexpr uint8_t REQUIRED_NEAR_SAMPLES = 2;
 
 bool personNear = false;
