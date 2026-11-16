@@ -3,7 +3,9 @@
 #include <esp_now.h>
 #include <esp_arduino_version.h>
 #include <Adafruit_NeoPixel.h>
-#include "temp_humi_monitor.h"
+#include "sensor_monitor.h"
+#include "sensor_snapshot.h"
+#include "vault_state.h"
 
 #define NEO_PIN 45
 #define LED_COUNT 1
@@ -27,11 +29,6 @@ void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
     }
 }
 
-bool sensor_error() {
-  return (glob_temperature == 0.0 && glob_humidity == 0.0) ||
-         (glob_temperature == -1.0 && glob_humidity == -1.0);
-}
-
 void task_neopixel(void *pvParameters) {
   Adafruit_NeoPixel strip(LED_COUNT, NEO_PIN, NEO_GRB + NEO_KHZ800);
   strip.begin();
@@ -39,26 +36,39 @@ void task_neopixel(void *pvParameters) {
   strip.show();
 
   while(1) {
-    if (sensor_error()) {
-      strip.setPixelColor(0, strip.Color(255, 255, 0));
+    const SensorSnapshot sensors = get_sensor_snapshot();
+    const VaultStatus status = get_vault_status();
+
+    if (status.breachActive) {
+      strip.setPixelColor(0, strip.Color(255, 0, 0));
       strip.show();
-      vTaskDelay(250);
+      vTaskDelay(pdMS_TO_TICKS(250));
       strip.clear();
       strip.show();
-      vTaskDelay(250);
+      vTaskDelay(pdMS_TO_TICKS(250));
       continue;
     }
 
-    if (glob_temperature < 20.0) {
+    if (!sensors.climateValid) {
+      strip.setPixelColor(0, strip.Color(255, 255, 0));
+      strip.show();
+      vTaskDelay(pdMS_TO_TICKS(250));
+      strip.clear();
+      strip.show();
+      vTaskDelay(pdMS_TO_TICKS(250));
+      continue;
+    }
+
+    if (sensors.temperatureC < 20.0f) {
       strip.setPixelColor(0, strip.Color(0, 0, 255)); // Blue
-    } else if (glob_temperature >= 20.0 && glob_temperature < 28.0) {
+    } else if (sensors.temperatureC < 28.0f) {
       strip.setPixelColor(0, strip.Color(0, 255, 0)); // Green
     } else {
       strip.setPixelColor(0, strip.Color(255, 0, 0)); // Red
     }
 
     strip.show();
-    vTaskDelay(5000);
+    vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
 
@@ -75,11 +85,16 @@ void task_led_blink(void *pvParameters) {
 
 void task_telemetry_uart(void *pvParameters) {
   while(1) {
-    // Émission télémétrie JSON périodique sur UART pour le Gateway
-    if (!sensor_error()) {
-      Serial.printf("{\"type\":\"telemetry\",\"temp\":%.2f,\"hum\":%.2f,\"state\":\"LOCKED\"}\n",
-                    glob_temperature, glob_humidity);
-    }
+    const SensorSnapshot sensors = get_sensor_snapshot();
+    const VaultStatus status = get_vault_status();
+    Serial.printf(
+        "{\"type\":\"telemetry\",\"temp\":%.2f,\"hum\":%.2f,\"climate_valid\":%s,\"light_adc\":%d,\"state\":\"%s\",\"breach\":%s}\n",
+        sensors.temperatureC,
+        sensors.humidityPct,
+        sensors.climateValid ? "true" : "false",
+        sensors.lightAdc,
+        status.lockState == LockState::Locked ? "LOCKED" : "UNLOCKED",
+        status.breachActive ? "true" : "false");
     vTaskDelay(pdMS_TO_TICKS(2000));
   }
 }
@@ -105,7 +120,7 @@ void setup() {
   }
 
   // Tâches FreeRTOS
-  xTaskCreate(temp_humi_monitor, "Temp & Humi Monitor", 4096, NULL, 2, NULL);
+  xTaskCreate(task_sensor_monitor, "Sensor Monitor", 4096, NULL, 2, NULL);
   xTaskCreate(task_neopixel, "NeoPixel Control", 2048, NULL, 2, NULL);
   xTaskCreate(task_led_blink, "LED Heartbeat Control", 2048, NULL, 1, NULL);
   xTaskCreate(task_telemetry_uart, "UART Telemetry", 3072, NULL, 1, NULL);
