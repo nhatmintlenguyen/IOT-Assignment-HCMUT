@@ -7,13 +7,15 @@ Uses Scikit-Learn Isolation Forest to detect abnormal vault sensor patterns.
 import datetime
 import numpy as np
 from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 
 class VaultAnomalyDetector:
     def __init__(self):
+        self.scaler = StandardScaler()
         self.model = IsolationForest(
-            n_estimators=50,
-            contamination=0.05,
+            n_estimators=100,
+            contamination=0.02,
             random_state=42
         )
         self._train_baseline_model()
@@ -21,48 +23,47 @@ class VaultAnomalyDetector:
     def _train_baseline_model(self):
         """
         Trains Isolation Forest on synthetic baseline of normal vault behavior:
-        - Normal business hours (07:00 - 20:00) with occasional night checks
+        - Safe can be locked or legitimately accessed (unlocked)
         - Internal safe is pitch dark when locked (light ADC 50 - 350)
+        - Safe internal sensor sees ambient room light when unlocked (light ADC 200 - 900)
         - Ambient laboratory temperature (22°C - 31°C) and humidity (45% - 75%)
-        - Distance clear when idle (> 40 cm) or normal approach (10 - 30 cm)
+        - Distance clear when idle (> 40 cm) or normal approach (15 - 45 cm)
         """
         np.random.seed(42)
-        n_samples = 1000
+        n_samples = 2000
 
-        # Feature 0: Hour of the day (mostly 7 to 20)
-        hour_probs = np.array([
-            0.01, 0.01, 0.01, 0.01, 0.01, 0.02, 0.03, # 0h-6h
-            0.08, 0.09, 0.10, 0.10, 0.09, 0.08, 0.07, # 7h-13h
-            0.07, 0.07, 0.06, 0.05, 0.02, 0.01, 0.01, # 14h-20h
-            0.01, 0.01, 0.01                         # 21h-23h
-        ], dtype=np.float64)
-        hour_probs /= hour_probs.sum()
-        hours = np.random.choice(range(24), size=n_samples, p=hour_probs)
+        # Feature 0: Hour of the day (spread across day and evening)
+        hours = np.random.randint(0, 24, size=n_samples)
 
         # Feature 1: Temperature (mean ~26.5°C, std ~2.0)
         temps = np.random.normal(26.5, 2.0, n_samples)
         temps = np.clip(temps, 20.0, 33.0)
 
-        # Feature 2: Humidity (mean ~62%, std ~6.0)
-        hums = np.random.normal(62.0, 6.0, n_samples)
-        hums = np.clip(hums, 40.0, 80.0)
+        # Feature 2: Humidity (mean ~62%, std ~5.0)
+        hums = np.random.normal(62.0, 5.0, n_samples)
+        hums = np.clip(hums, 45.0, 75.0)
 
-        # Feature 3: Internal Light ADC when door closed (mean ~150, std ~40)
-        lights = np.random.normal(150.0, 40.0, n_samples)
-        lights = np.clip(lights, 30.0, 400.0)
+        # Feature 3: Safe state (0 = Locked, 1 = Unlocked; 75% locked, 25% legitimate unlock)
+        states = np.random.choice([0, 1], size=n_samples, p=[0.75, 0.25])
 
-        # Feature 4: Approach Distance in cm (mean ~55cm, std ~15)
-        distances = np.random.normal(55.0, 15.0, n_samples)
-        distances = np.clip(distances, 5.0, 120.0)
+        # Feature 4: Internal Light ADC (depends on door state)
+        lights = np.where(
+            states == 0,
+            np.random.normal(130.0, 35.0, n_samples),
+            np.random.normal(450.0, 120.0, n_samples)
+        )
+        lights = np.clip(lights, 30.0, 850.0)
 
-        # Feature 5: Safe state (0 = Locked, 1 = Unlocked; 92% locked)
-        states = np.random.choice([0, 1], size=n_samples, p=[0.92, 0.08])
+        # Feature 5: Approach Distance in cm (mean ~50cm, std ~12)
+        distances = np.random.normal(50.0, 12.0, n_samples)
+        distances = np.clip(distances, 15.0, 95.0)
 
-        # Feature 6: Breach flag (0 = normal, baseline is always 0)
+        # Feature 6: Breach flag (always 0 in baseline)
         breaches = np.zeros(n_samples)
 
-        X_train = np.column_stack([hours, temps, hums, lights, distances, states, breaches])
-        self.model.fit(X_train)
+        X_train = np.column_stack([hours, temps, hums, states, lights, distances, breaches])
+        X_scaled = self.scaler.fit_transform(X_train)
+        self.model.fit(X_scaled)
 
     def evaluate(self, telemetry: dict):
         """
@@ -75,38 +76,54 @@ class VaultAnomalyDetector:
         now = datetime.datetime.now()
         hour = now.hour
 
-        temp = float(telemetry.get("temp", 25.0))
-        hum = float(telemetry.get("hum", 60.0))
-        light = float(telemetry.get("light_adc", 150))
-        dist = float(telemetry.get("distance_cm", 50.0))
+        temp = float(telemetry.get("temp", 26.0))
+        hum = float(telemetry.get("hum", 62.0))
+        light = float(telemetry.get("light_adc", 140))
+        dist = float(telemetry.get("distance_cm", 45.0))
         is_unlocked = 1 if telemetry.get("state") == "UNLOCKED" else 0
         is_breach = 1 if telemetry.get("breach", False) else 0
 
-        features = np.array([[hour, temp, hum, light, dist, is_unlocked, is_breach]])
+        features = np.array([[hour, temp, hum, is_unlocked, light, dist, is_breach]])
+        features_scaled = self.scaler.transform(features)
 
-        # IsolationForest decision_function: lower means more anomalous (negative = anomaly)
-        raw_score = self.model.decision_function(features)[0]
-        prediction = self.model.predict(features)[0]  # -1 = anomaly, 1 = normal
+        # Statistical isolation score
+        raw_score = self.model.decision_function(features_scaled)[0]
+        prediction = self.model.predict(features_scaled)[0]  # -1 = outlier, 1 = normal
 
-        # Normalize score into a friendly 0.0 - 1.0 range
-        # raw_score typically ranges from ~ -0.3 (extreme anomaly) to +0.25 (typical normal)
-        normalized_anomaly = float(np.clip((0.2 - raw_score) / 0.5, 0.0, 1.0))
-        is_anomaly = bool(prediction == -1 or is_breach == 1 or normalized_anomaly > 0.65)
-
-        # Diagnosing the primary anomaly factor
+        # Physical domain risk assessment
         reasons = []
-        if is_breach or (is_unlocked == 0 and light > 1000):
-            reasons.append("Light breach detected while vault locked")
-        if hour < 6 or hour > 22:
-            if is_unlocked or dist < 30:
-                reasons.append("Physical activity during non-working hours")
-        if temp > 35.0:
+        domain_penalty = 0.0
+
+        if is_breach:
+            domain_penalty += 0.85
+            reasons.append("Security breach alarm active")
+
+        # Casing drilled or opened without unlock command
+        if is_unlocked == 0 and light > 700:
+            severity = min(0.80, (light - 700) / 1200.0)
+            domain_penalty += severity
+            reasons.append(f"Internal light detected while locked ({int(light)} ADC)")
+
+        # Fire / thermal attack
+        if temp > 36.0:
+            severity = min(0.85, (temp - 36.0) / 14.0)
+            domain_penalty += severity
             reasons.append(f"High thermal vector ({temp:.1f}°C)")
-        elif temp < 15.0:
+        elif temp < 14.0:
+            domain_penalty += 0.40
             reasons.append(f"Abnormally low temperature ({temp:.1f}°C)")
+
+        # Excessive moisture
         if hum > 85.0:
+            domain_penalty += 0.40
             reasons.append(f"Excessive humidity ({hum:.1f}%)")
 
+        # Baseline normalized anomaly score (0.00 to 0.40 under normal conditions)
+        base_score = float(np.clip((0.14 - raw_score) / 0.45, 0.0, 0.40))
+        total_score = float(np.clip(base_score + domain_penalty, 0.0, 1.0))
+
+        # Anomaly threshold: total score >= 0.50 or physical breach
+        is_anomaly = bool(total_score >= 0.50 or is_breach == 1 or len(reasons) > 0)
         reason_str = ", ".join(reasons) if reasons else ("Outlier vector" if is_anomaly else "Normal")
 
-        return is_anomaly, round(normalized_anomaly, 2), reason_str
+        return is_anomaly, round(total_score, 2), reason_str

@@ -31,17 +31,23 @@ except ImportError:
 
 
 class SmartSafeGateway:
-    def __init__(self, tb_host, tb_port, tb_token, serial_port, baudrate, mock=False):
+    def __init__(self, tb_host, tb_port, tb_token, serial_port, baudrate, mock=False, gw_token=None):
         self.tb_host = tb_host
         self.tb_port = tb_port
         self.tb_token = tb_token
+        self.gw_token = gw_token
         self.serial_port_name = serial_port
         self.baudrate = baudrate
         self.mock_mode = mock
 
         self.serial_conn = None
         self.mqtt_client = None
+        self.gw_client = None
+        self._last_gw_ping = 0
         self.running = True
+        self.last_breach_state = False
+        self.last_known_state = None
+        self.last_anomaly_state = False
         self.detector = VaultAnomalyDetector()
 
         # Simulated mock state
@@ -52,7 +58,11 @@ class SmartSafeGateway:
             "distance_cm": 45.0,
             "state": "LOCKED",
             "breach": False,
-            "lockdown": False
+            "lockdown": False,
+            "last_badge": "#01-ADMIN (GRANTED)",
+            "espnow_link": "ACTIVE (-58 dBm)",
+            "vault_hardware": "USB CDC ONLINE",
+            "gateway_status": "ONLINE (Wi-Fi MQTT)"
         }
 
     # --------------------------------------------------------------------------
@@ -149,6 +159,23 @@ class SmartSafeGateway:
         try:
             self.mqtt_client.connect(self.tb_host, self.tb_port, keepalive=60)
             self.mqtt_client.loop_start()
+
+            # Connect optional gateway heartbeat client so both Gateway and Vault remain Active
+            if self.gw_token:
+                try:
+                    try:
+                        self.gw_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="smart-safe-gw-link")
+                    except AttributeError:
+                        self.gw_client = mqtt.Client(client_id="smart-safe-gw-link")
+                    self.gw_client.username_pw_set(self.gw_token)
+                    self.gw_client.connect(self.tb_host, self.tb_port, keepalive=60)
+                    self.gw_client.loop_start()
+                    self.gw_client.publish("v1/devices/me/telemetry", json.dumps({"gateway_status": "online"}), qos=1)
+                    self._last_gw_ping = time.time()
+                    print(f"[MQTT] Gateway link connected (token: {self.gw_token})")
+                except Exception as ge:
+                    print(f"[WARN] Gateway link warning: {ge}")
+
             return True
         except Exception as e:
             print(f"[ERROR] Could not connect to ThingsBoard MQTT broker: {e}")
@@ -190,16 +217,52 @@ class SmartSafeGateway:
         if method == "unlock" or (method == "setLockState" and params is True):
             self.write_serial("unlock")
             response_payload["state"] = "UNLOCKED"
+            self.last_known_state = "UNLOCKED"
+            self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({
+                "state": "UNLOCKED",
+                "audit_state": "UNLOCKED",
+                "audit_event": "Door Unlocked (Operator Dashboard)"
+            }))
         elif method == "lock" or (method == "setLockState" and params is False):
             self.write_serial("lock")
             response_payload["state"] = "LOCKED"
+            self.last_known_state = "LOCKED"
+            self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({
+                "state": "LOCKED",
+                "audit_state": "LOCKED",
+                "audit_event": "Door Locked (Operator Dashboard)"
+            }))
         elif method in ("ack", "ackBreach", "reset"):
-            self.write_serial("ack")
-            response_payload["breach"] = False
+            is_breach_active = self.mock_state.get("breach", False) if self.mock_mode else self.last_breach_state
+            if not is_breach_active:
+                print("[RPC] Ignored 'ack': No active security breach.")
+                response_payload["status"] = "ignored"
+                response_payload["message"] = "No active breach to acknowledge"
+            else:
+                self.write_serial("ack")
+                self.last_breach_state = False
+                response_payload["breach"] = False
+                self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({
+                    "breach": False,
+                    "audit_state": self.last_known_state or "LOCKED",
+                    "audit_event": "Alarm Acknowledged by Operator"
+                }))
         elif method == "setLockdown":
             is_active = bool(params) if isinstance(params, bool) else (str(params).lower() in ("true", "1"))
             self.write_serial(f"lockdown {1 if is_active else 0}")
             response_payload["lockdown"] = is_active
+            st = "LOCKED" if is_active else (self.last_known_state or "LOCKED")
+            self.last_known_state = st
+            self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({
+                "lockdown": is_active,
+                "state": st,
+                "audit_state": st,
+                "audit_event": "EMERGENCY LOCKDOWN ARMED" if is_active else "Lockdown Cleared by Operator"
+            }))
+        elif method in ("getState", "getLockState"):
+            response_payload["value"] = (self.mock_state["state"] == "UNLOCKED")
+        elif method in ("getLockdown",):
+            response_payload["value"] = bool(self.mock_state["lockdown"])
         else:
             print(f"[WARN] Unknown RPC method: '{method}'")
             response_payload["status"] = "unknown_method"
@@ -227,14 +290,41 @@ class SmartSafeGateway:
 
         # 1. Telemetry streaming frame (emitted every 2 seconds by YoloUNO)
         if msg_type == "telemetry":
+            if "breach" in obj:
+                self.last_breach_state = bool(obj["breach"])
+
             # Run Edge AI anomaly evaluation (T09)
             is_anomaly, anomaly_score, reason = self.detector.evaluate(obj)
             obj["anomaly"] = is_anomaly
             obj["anomaly_score"] = anomaly_score
-            obj["anomaly_reason"] = reason
+            # Only include anomaly_reason when an anomaly is actually active
+            if is_anomaly:
+                obj["anomaly_reason"] = reason
 
             payload = json.dumps(obj)
             self.mqtt_client.publish("v1/devices/me/telemetry", payload)
+
+            # Audit logging: record door state transitions (LOCKED <-> UNLOCKED)
+            current_state = obj.get("state")
+            if self.last_known_state is not None and current_state != self.last_known_state:
+                self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({
+                    "audit_state": current_state,
+                    "audit_event": f"Door State changed to {current_state}"
+                }))
+            self.last_known_state = current_state
+
+            # Audit logging: record anomaly trigger only on state flip
+            if is_anomaly and not self.last_anomaly_state:
+                self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({
+                    "audit_state": current_state or "LOCKED",
+                    "audit_event": f"AI ANOMALY: {reason} (score={anomaly_score:.2f})"
+                }))
+            self.last_anomaly_state = is_anomaly
+
+            # Periodic Gateway heartbeat
+            if self.gw_client and (time.time() - self._last_gw_ping > 15):
+                self.gw_client.publish("v1/devices/me/telemetry", json.dumps({"gateway_status": "online"}), qos=0)
+                self._last_gw_ping = time.time()
 
             status_color = "\033[92m" if obj.get("state") == "UNLOCKED" else "\033[94m"
             breach_alert = " \033[91m[BREACH ALERT!]\033[0m" if obj.get("breach") else ""
@@ -250,16 +340,35 @@ class SmartSafeGateway:
             source = obj.get("source", "system")
             action = obj.get("action") or obj.get("result") or obj.get("event")
             print(f"\033[96m[EVENT] Source: {source} | Action: {action}\033[0m")
-            self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({"event": action, "source": source}))
+            event_desc = f"{action} ({source})"
+            event_payload = {
+                "event": action,
+                "source": source,
+                "audit_state": self.last_known_state or "LOCKED",
+                "audit_event": event_desc
+            }
+            # If event is from ESP-NOW badge scanner
+            badge = obj.get("badge") or obj.get("uid") or obj.get("badge_id")
+            if badge or source == "espnow" or "badge" in str(action).lower():
+                badge_name = badge or "BADGE_#01"
+                self.mock_state["last_badge"] = f"{badge_name} ({str(action).upper()})"
+                self.mock_state["espnow_link"] = "ACTIVE (Packet RX)"
+                event_payload["last_badge"] = self.mock_state["last_badge"]
+                event_payload["espnow_link"] = self.mock_state["espnow_link"]
+
+            self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps(event_payload))
 
         # 3. Critical Security Alarms (Bruteforce detected, Light breach)
         elif msg_type == "alarm":
             alarm_name = obj.get("alarm", "unknown_alarm")
             action = obj.get("action", "")
             print(f"\033[91;1m[CRITICAL ALARM] {alarm_name.upper()} | Action: {action}\033[0m")
+            alarm_desc = f"CRITICAL ALARM: {alarm_name}"
             self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({
                 "critical_alarm": alarm_name,
-                "alarm_active": True
+                "alarm_active": True,
+                "audit_state": self.last_known_state or "LOCKED",
+                "audit_event": alarm_desc
             }))
 
     def run_mock_loop(self):
@@ -277,7 +386,11 @@ class SmartSafeGateway:
                 "person_near": self.mock_state["distance_cm"] < 30.0,
                 "state": self.mock_state["state"],
                 "breach": self.mock_state["breach"],
-                "lockdown": self.mock_state["lockdown"]
+                "lockdown": self.mock_state["lockdown"],
+                "last_badge": self.mock_state["last_badge"],
+                "espnow_link": self.mock_state["espnow_link"],
+                "vault_hardware": self.mock_state["vault_hardware"],
+                "gateway_status": self.mock_state["gateway_status"]
             })
             self.process_incoming_line(mock_line)
 
@@ -318,6 +431,9 @@ class SmartSafeGateway:
                     time.sleep(2.0)
 
         print("\n[INFO] Gateway stopping...")
+        if self.gw_client:
+            self.gw_client.loop_stop()
+            self.gw_client.disconnect()
         if self.mqtt_client:
             self.mqtt_client.loop_stop()
             self.mqtt_client.disconnect()
@@ -336,7 +452,9 @@ def main():
     parser.add_argument("--port", type=int, default=int(os.getenv("THINGSBOARD_PORT", "1883")),
                         help="ThingsBoard MQTT port (default: 1883)")
     parser.add_argument("--token", default=os.getenv("THINGSBOARD_TOKEN", "6EzRR6gcTvnOcgVF53hP"),
-                        help="ThingsBoard Device Access Token")
+                        help="ThingsBoard Device Access Token (default: 6EzRR6gcTvnOcgVF53hP)")
+    parser.add_argument("--gateway-token", default=os.getenv("GATEWAY_TOKEN", "GATEWAY_SECRET_TOKEN"),
+                        help="ThingsBoard Gateway Access Token (default: GATEWAY_SECRET_TOKEN)")
     parser.add_argument("--serial-port", default=os.getenv("SERIAL_PORT", "auto"),
                         help="Serial port for YoloUNO (default: auto)")
     parser.add_argument("--baudrate", type=int, default=int(os.getenv("SERIAL_BAUDRATE", "115200")),
@@ -350,6 +468,7 @@ def main():
         tb_host=args.host,
         tb_port=args.port,
         tb_token=args.token,
+        gw_token=args.gateway_token,
         serial_port=args.serial_port,
         baudrate=args.baudrate,
         mock=args.mock
