@@ -26,9 +26,9 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      # Localhost only: the Gateway runs on the same machine; remote access goes through the tunnel.
-      - "127.0.0.1:8080:8080"   # Web UI + REST/HTTP device API
-      - "127.0.0.1:1883:1883"   # MQTT
+      # Open on all interfaces so the external Gateway (e.g. Raspberry Pi Zero 2W on LAN/Wi-Fi) can connect
+      - "8080:8080"   # Web UI + REST/HTTP device API
+      - "1883:1883"   # MQTT
     environment:
       TB_SERVICE_ID: tb-node
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/thingsboard

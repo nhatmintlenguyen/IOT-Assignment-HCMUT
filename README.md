@@ -246,3 +246,44 @@ Every interaction on the safe triggers a high-visibility, 1.2-second LCD status 
   ├── Set up RuleChain for Telegram bot breach notifications
   └── Collect evaluation metrics and record demo video
 ```
+
+---
+
+## 7. Local ThingsBoard CE Deployment (Docker - `N07`)
+
+The project includes a production-ready, local ThingsBoard Community Edition (v4.3) environment backed by PostgreSQL 18.
+
+### 7.1 Quickstart Commands
+
+```bash
+# First-time initialization (creates PostgreSQL DB schema and starts services):
+make init
+
+# Standard startup (subsequent runs):
+make up
+
+# View container logs:
+make logs
+
+# Stop containers (preserves all data in Docker volume):
+make down
+```
+
+### 7.2 Access & Credentials
+
+* **Web UI URL**: [http://localhost:8080](http://localhost:8080)
+* **MQTT Broker**: `localhost:1883`
+* **Pre-configured Accounts**:
+  * **System Administrator**: `sysadmin@thingsboard.org` / `sysadmin`
+  * **Tenant Administrator**: `tenant@thingsboard.org` / `tenant`
+* **Pre-registered Device**:
+  * **Device Name**: `Smart Safe Guardian`
+  * **Device Access Token**: `6EzRR6gcTvnOcgVF53hP`
+
+### 7.3 Instant Verification (Test Telemetry via curl)
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/6EzRR6gcTvnOcgVF53hP/telemetry" \
+  -H "Content-Type: application/json" \
+  -d '{"temp": 28.5, "hum": 65.2, "light_adc": 140, "distance_cm": 42.0, "state": "LOCKED", "breach": false, "lockdown": false}'
+```
