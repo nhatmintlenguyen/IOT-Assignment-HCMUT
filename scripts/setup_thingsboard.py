@@ -256,12 +256,26 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
                 "showLine": True,
                 "lineColor": color,
                 "showSplitLines": show_split,
-                "splitLinesColor": "rgba(255, 255, 255, 0.08)"
+                "splitLinesColor": "rgba(255, 255, 255, 0.08)",
+                "min": {
+                    "type": "constant",
+                    "value": min_val,
+                    "latestKey": None,
+                    "latestKeyType": None,
+                    "entityAlias": None,
+                    "entityKey": None,
+                    "entityKeyType": None
+                },
+                "max": {
+                    "type": "constant",
+                    "value": max_val,
+                    "latestKey": None,
+                    "latestKeyType": None,
+                    "entityAlias": None,
+                    "entityKey": None,
+                    "entityKeyType": None
+                }
             }
-            if min_val is not None:
-                ax["min"] = min_val
-            if max_val is not None:
-                ax["max"] = max_val
             if interval is not None:
                 ax["interval"] = interval
             if split_number is not None:
@@ -292,9 +306,9 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
             cfg["settings"]["xAxis"]["splitLinesColor"] = "rgba(255, 255, 255, 0.05)"
 
         cfg["settings"]["yAxes"] = {
-            "axis_light": make_axis("axis_light", "Light (ADC)", "#fbbf24", "left", 0, "ADC", 0, show_split=True, min_val=0),
+            "axis_light": make_axis("axis_light", "Light (ADC)", "#fbbf24", "left", 0, "", 0, show_split=True, min_val=0),
             "axis_dist": make_axis("axis_dist", "Distance (cm)", "#2dd4bf", "left", 1, "cm", 0, min_val=0),
-            "axis_temp": make_axis("axis_temp", "Temp (°C)", "#fb923c", "right", 0, "°C", 1),
+            "axis_temp": make_axis("axis_temp", "Temp (°C)", "#f43f5e", "right", 0, "°C", 1),
             "axis_ai": make_axis("axis_ai", "AI Score", "#818cf8", "right", 1, "", 2, min_val=0, max_val=1, interval=0.2, split_number=5)
         }
 
@@ -403,7 +417,7 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
                     "color": "#ffffff",
                     "settings": {
                         "useCellStyleFunction": True,
-                        "cellStyleFunction": 'if (value === "UNLOCKED") return {color: "#f59e0b", fontWeight: "bold"}; if (value === "LOCKED") return {color: "#10b981", fontWeight: "bold"}; return {color: "#ffffff"};'
+                        "cellStyleFunction": 'if (value === "UNLOCKED") return {color: "#f59e0b", fontWeight: "bold"}; if (value === "LOCKED") return {color: "#10b981", fontWeight: "bold"}; if (value === "DENIED" || value === "REJECTED" || value === "ALARM" || value === "LOCKDOWN") return {color: "#ef4444", fontWeight: "bold"}; return {color: "#ffffff"};'
                     },
                     "_hash": random.random()
                 },
@@ -445,7 +459,7 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
 
     widgets = {
         w_state: make_val(w_state, "Safe Door State", "state", "", 0, "lock", "#10b981", font_size=28, is_func_color=True, color_func='return value === "UNLOCKED" ? "#f59e0b" : "#10b981";'),
-        w_temp: make_val(w_temp, "Vault Temperature", "temp", "°C", 1, "thermostat", "#fb923c"),
+        w_temp: make_val(w_temp, "Vault Temperature", "temp", "°C", 1, "thermostat", "#f43f5e"),
         w_hum: make_val(w_hum, "Vault Humidity", "hum", "%", 1, "water_drop", "#38bdf8"),
         w_light: make_val(w_light, "Vault Internal Light", "light_adc", "ADC", 0, "lightbulb", "#fbbf24"),
         w_dist: make_val(w_dist, "Proximity Distance", "distance_cm", "cm", 0, "radar", "#2dd4bf"),
@@ -460,7 +474,7 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
         w_chart: make_chart(w_chart, "Live Environmental & Security Telemetry", [
             {"name": "light_adc", "label": "Light Level (ADC)", "color": "#fbbf24", "units": "ADC", "yAxisId": "axis_light"},
             {"name": "distance_cm", "label": "Sonar Distance (cm)", "color": "#2dd4bf", "units": "cm", "yAxisId": "axis_dist"},
-            {"name": "temp", "label": "Temperature (°C)", "color": "#fb923c", "units": "°C", "decimals": 1, "yAxisId": "axis_temp"},
+            {"name": "temp", "label": "Temperature (°C)", "color": "#f43f5e", "units": "°C", "decimals": 1, "yAxisId": "axis_temp"},
             {"name": "anomaly_score", "label": "AI Anomaly Score", "color": "#818cf8", "decimals": 3, "yAxisId": "axis_ai"}
         ]),
 
@@ -537,7 +551,7 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
                 "realtime": {
                     "realtimeType": 0,
                     "interval": 1000,
-                    "timewindowMs": 60000
+                    "timewindowMs": 300000
                 }
             },
             "settings": {

@@ -81,7 +81,7 @@ def discover_thingsboard_server(beacon_port=50051, timeout=5.0):
 
 
 class SmartSafeGateway:
-    def __init__(self, tb_host, tb_port, tb_token, serial_port, baudrate, mock=False, gw_token=None, beacon_port=50051, fallback_host="127.0.0.1"):
+    def __init__(self, tb_host, tb_port, tb_token, serial_port, baudrate, mock=False, gw_token=None, beacon_port=50051, fallback_host="127.0.0.1", debug=False):
         self.raw_tb_host = tb_host
         self.tb_host = tb_host
         self.tb_port = tb_port
@@ -93,6 +93,7 @@ class SmartSafeGateway:
         self.serial_port_name = serial_port
         self.baudrate = baudrate
         self.mock_mode = mock
+        self.debug_mode = debug
 
         self.serial_conn = None
         self.mqtt_client = None
@@ -101,10 +102,16 @@ class SmartSafeGateway:
         self._last_gw_ping = 0
         self._last_unlock_event_time = 0
         self._last_lock_event_time = 0
+        self._last_rogue_badge_time = 0
+        self._last_bruteforce_time = 0
+        self._pending_operator_unlock = 0
+        self._pending_operator_lock = 0
+        self._pending_operator_ack = 0
+        self._pending_operator_lockdown = 0
+        self._recent_events = {}
         self.running = True
         self.last_breach_state = False
         self.last_known_state = None
-        self.last_anomaly_state = False
         self.detector = VaultAnomalyDetector()
 
         # Simulated mock state
@@ -116,28 +123,59 @@ class SmartSafeGateway:
             "state": "LOCKED",
             "breach": False,
             "lockdown": False,
-            "last_badge": "#01-ADMIN (GRANTED)",
+            "last_badge": "AUTHORIZED BADGE",
             "espnow_link": "ACTIVE (-58 dBm)",
             "vault_hardware": "USB CDC ONLINE",
             "gateway_status": "ONLINE (Wi-Fi MQTT)"
         }
 
+    def _ts(self):
+        """Returns current local time formatted as [HH:MM:SS]."""
+        return time.strftime("[%H:%M:%S]")
+
     # --------------------------------------------------------------------------
     # SERIAL COMMUNICATION (YoloUNO <--> Gateway)
     # --------------------------------------------------------------------------
     def _find_serial_port(self):
-        """Auto-detects USB serial ports on Linux, macOS, and Windows."""
+        """Auto-detects YoloUNO USB serial port, avoiding capturing Yolo:Bit badge."""
         if self.serial_port_name and self.serial_port_name.lower() != "auto":
             return self.serial_port_name
 
-        candidates = (
-            glob.glob("/dev/ttyACM*") +
-            glob.glob("/dev/ttyUSB*") +
-            glob.glob("/dev/cu.usb*") +
-            glob.glob("/dev/cu.wch*")
-        )
-        if candidates:
-            return candidates[0]
+        # 1. Prefer /dev/serial/by-id on Linux to accurately differentiate YoloUNO vs Badge
+        by_id_dir = "/dev/serial/by-id"
+        if os.path.isdir(by_id_dir):
+            for entry in sorted(os.listdir(by_id_dir)):
+                low = entry.lower()
+                # YoloUNO is ESP32-S3 (Espressif / ACM)
+                if any(k in low for k in ("espressif", "acm", "jtag", "yolo_uno")):
+                    real_path = os.path.realpath(os.path.join(by_id_dir, entry))
+                    return real_path
+
+        # 2. Check /dev/ttyACM* (native USB CDC for ESP32-S3 YoloUNO)
+        acm_candidates = sorted(glob.glob("/dev/ttyACM*"))
+        if acm_candidates:
+            return acm_candidates[0]
+
+        # 3. If there are USB serial ports, check that they are not known badges
+        for p in sorted(glob.glob("/dev/ttyUSB*")):
+            if os.path.isdir(by_id_dir):
+                is_badge = False
+                for entry in os.listdir(by_id_dir):
+                    target_real = os.path.realpath(os.path.join(by_id_dir, entry))
+                    if p == target_real or p.endswith(os.path.basename(target_real)):
+                        if any(k in entry.lower() for k in ("1a86", "ch34", "cp21", "usb_serial")):
+                            is_badge = True
+                            break
+                if is_badge:
+                    continue  # Skip badge port, wait for YoloUNO
+            return p
+
+        # 4. macOS / Windows fallback
+        for pattern in ("/dev/cu.usbmodem*", "/dev/cu.wch*"):
+            candidates = sorted(glob.glob(pattern))
+            if candidates:
+                return candidates[0]
+
         return None
 
     def connect_serial(self):
@@ -169,20 +207,26 @@ class SmartSafeGateway:
     def write_serial(self, command_str):
         """Sends command line to physical or mock YoloUNO."""
         command_clean = command_str.strip()
-        print(f"[TX -> YoloUNO] Command: '{command_clean}'")
+        if self.debug_mode:
+            print(f"{self._ts()} [DEBUG SERIAL TX] Command: '{command_clean}'")
 
         if self.mock_mode:
             if command_clean == "unlock":
                 self.mock_state["state"] = "UNLOCKED"
+                self.process_incoming_line('{"type":"event","source":"system","action":"unlock","state":"UNLOCKED"}')
             elif command_clean == "lock":
                 self.mock_state["state"] = "LOCKED"
+                self.process_incoming_line('{"type":"event","source":"system","action":"manual_lock","state":"LOCKED"}')
             elif command_clean in ("ack", "reset"):
                 self.mock_state["breach"] = False
+                self.process_incoming_line('{"type":"event","event":"breach_acknowledged"}')
             elif command_clean == "lockdown 1":
                 self.mock_state["lockdown"] = True
                 self.mock_state["state"] = "LOCKED"
+                self.process_incoming_line('{"type":"event","event":"lockdown_enabled"}')
             elif command_clean == "lockdown 0":
                 self.mock_state["lockdown"] = False
+                self.process_incoming_line('{"type":"event","event":"lockdown_disabled"}')
             return
 
         if self.serial_conn and self.serial_conn.is_open:
@@ -287,7 +331,8 @@ class SmartSafeGateway:
         """Handles incoming RPC calls from ThingsBoard dashboard."""
         topic = msg.topic
         payload_str = msg.payload.decode("utf-8")
-        print(f"\n[RX <- ThingsBoard RPC] Topic: {topic} | Payload: {payload_str}")
+        if self.debug_mode:
+            print(f"{self._ts()} [DEBUG MQTT RX RPC] Topic: {topic} | Payload: {payload_str}")
 
         # Extract request id from: v1/devices/me/rpc/request/{requestId}
         req_id = topic.split("/")[-1]
@@ -304,64 +349,46 @@ class SmartSafeGateway:
         response_payload = {"status": "ok", "method": method}
 
         if method == "unlock" or (method == "setLockState" and params is True):
+            print(f"{self._ts()} [RPC] Operator commanded: UNLOCK SAFE")
+            self._pending_operator_unlock = time.time()
             self.write_serial("unlock")
             response_payload["state"] = "UNLOCKED"
-            self.last_known_state = "UNLOCKED"
-            self._last_unlock_event_time = time.time()
-            self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({
-                "state": "UNLOCKED",
-                "audit_state": "UNLOCKED",
-                "audit_event": "Door Unlocked (Operator Dashboard)"
-            }))
         elif method == "lock" or (method == "setLockState" and params is False):
+            print(f"{self._ts()} [RPC] Operator commanded: LOCK SAFE")
+            self._pending_operator_lock = time.time()
             self.write_serial("lock")
             response_payload["state"] = "LOCKED"
-            self.last_known_state = "LOCKED"
-            self._last_lock_event_time = time.time()
-            self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({
-                "state": "LOCKED",
-                "audit_state": "LOCKED",
-                "audit_event": "Door Locked (Operator Dashboard)"
-            }))
         elif method in ("ack", "ackBreach", "reset"):
             is_breach_active = self.mock_state.get("breach", False) if self.mock_mode else self.last_breach_state
             if not is_breach_active:
-                print("[RPC] Ignored 'ack': No active security breach.")
+                print(f"{self._ts()} [RPC] Ignored 'ack': No active security breach.")
                 response_payload["status"] = "ignored"
                 response_payload["message"] = "No active breach to acknowledge"
             else:
+                print(f"{self._ts()} [RPC] Operator commanded: ACKNOWLEDGE ALARM")
+                self._pending_operator_ack = time.time()
                 self.write_serial("ack")
                 self.last_breach_state = False
                 response_payload["breach"] = False
-                self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({
-                    "breach": False,
-                    "audit_state": self.last_known_state or "LOCKED",
-                    "audit_event": "Alarm Acknowledged by Operator"
-                }))
         elif method == "setLockdown":
             is_active = bool(params) if isinstance(params, bool) else (str(params).lower() in ("true", "1"))
+            print(f"{self._ts()} [RPC] Operator commanded: {'ENGAGE' if is_active else 'CLEAR'} LOCKDOWN")
+            self._pending_operator_lockdown = time.time()
             self.write_serial(f"lockdown {1 if is_active else 0}")
             response_payload["lockdown"] = is_active
-            st = "LOCKED" if is_active else (self.last_known_state or "LOCKED")
-            self.last_known_state = st
-            self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({
-                "lockdown": is_active,
-                "state": st,
-                "audit_state": st,
-                "audit_event": "EMERGENCY LOCKDOWN ARMED" if is_active else "Lockdown Cleared by Operator"
-            }))
         elif method in ("getState", "getLockState"):
             response_payload["value"] = (self.mock_state["state"] == "UNLOCKED")
         elif method in ("getLockdown",):
             response_payload["value"] = bool(self.mock_state["lockdown"])
         else:
-            print(f"[WARN] Unknown RPC method: '{method}'")
+            print(f"{self._ts()} [RPC] Unknown RPC method: '{method}'")
             response_payload["status"] = "unknown_method"
 
         # Reply to ThingsBoard RPC response topic
         resp_topic = f"v1/devices/me/rpc/response/{req_id}"
         self.mqtt_client.publish(resp_topic, json.dumps(response_payload))
-        print(f"[TX -> ThingsBoard RPC] Response sent to {resp_topic}: {response_payload}")
+        if self.debug_mode:
+            print(f"{self._ts()} [DEBUG MQTT TX RPC] Response sent to {resp_topic}: {response_payload}")
 
     # --------------------------------------------------------------------------
     # PROCESSING LOOPS
@@ -370,7 +397,12 @@ class SmartSafeGateway:
         """Parses a single JSON line received from YoloUNO."""
         line = line.strip()
         if not line.startswith("{") or not line.endswith("}"):
+            if self.debug_mode and line:
+                print(f"{self._ts()} [DEBUG SERIAL RAW] {line}")
             return
+
+        if self.debug_mode:
+            print(f"{self._ts()} [DEBUG SERIAL RX] {line}")
 
         try:
             obj = json.loads(line)
@@ -393,24 +425,23 @@ class SmartSafeGateway:
                 obj["anomaly_reason"] = reason
 
             payload = json.dumps(obj)
-            self.mqtt_client.publish("v1/devices/me/telemetry", payload)
+            if self.mqtt_client and self.mqtt_connected:
+                self.mqtt_client.publish("v1/devices/me/telemetry", payload)
+            if self.debug_mode:
+                print(f"{self._ts()} [DEBUG MQTT TX] v1/devices/me/telemetry -> {payload}")
 
             # Audit logging: record door state transitions (LOCKED <-> UNLOCKED)
             current_state = obj.get("state")
-            if self.last_known_state is not None and current_state != self.last_known_state:
-                self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({
-                    "audit_state": current_state,
-                    "audit_event": f"Door State changed to {current_state}"
-                }))
-            self.last_known_state = current_state
-
-            # Audit logging: record anomaly trigger only on state flip
-            if is_anomaly and not self.last_anomaly_state:
-                self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({
-                    "audit_state": current_state or "LOCKED",
-                    "audit_event": f"AI ANOMALY: {reason} (score={anomaly_score:.2f})"
-                }))
-            self.last_anomaly_state = is_anomaly
+            if current_state in ("LOCKED", "UNLOCKED"):
+                if self.last_known_state is not None and current_state != self.last_known_state:
+                    action_time = self._last_unlock_event_time if current_state == "UNLOCKED" else self._last_lock_event_time
+                    if (time.time() - action_time) >= 2.0:
+                        if self.mqtt_client and self.mqtt_connected:
+                            self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({
+                                "audit_state": current_state,
+                                "audit_event": f"Door State Changed to {current_state.title()}"
+                            }))
+                self.last_known_state = current_state
 
             # Periodic Gateway heartbeat
             if self.gw_client and (time.time() - self._last_gw_ping > 15):
@@ -418,13 +449,14 @@ class SmartSafeGateway:
                 self._last_gw_ping = time.time()
 
             status_color = "\033[92m" if obj.get("state") == "UNLOCKED" else "\033[94m"
-            breach_alert = " \033[91m[BREACH ALERT!]\033[0m" if obj.get("breach") else ""
-            lockdown_tag = " \033[95m[LOCKDOWN]\033[0m" if obj.get("lockdown") else ""
-            anomaly_tag = f" \033[93m[AI ANOMALY: {reason} ({anomaly_score})]\033[0m" if is_anomaly else ""
+            breach_alert = " \033[91;1m[BREACH!]\033[0m" if obj.get("breach") else ""
+            lockdown_tag = " \033[95;1m[LOCKDOWN]\033[0m" if obj.get("lockdown") else ""
+            score_color = "\033[91;1m" if anomaly_score >= 0.5 else ("\033[93m" if anomaly_score >= 0.2 else "\033[92m")
 
-            print(f"[TELEMETRY] Temp: {obj.get('temp'):.1f}°C | Hum: {obj.get('hum'):.1f}% | "
-                  f"Light: {obj.get('light_adc')} | Dist: {obj.get('distance_cm'):.1f}cm | "
-                  f"State: {status_color}{obj.get('state')}\033[0m{breach_alert}{lockdown_tag}{anomaly_tag}")
+            print(f"{self._ts()} [TELEMETRY] Temp: {obj.get('temp', 0.0):.1f}°C | Hum: {obj.get('hum', 0.0):.1f}% | "
+                  f"Light: {obj.get('light_adc', 0)} | Dist: {obj.get('distance_cm', 0.0):.1f}cm | "
+                  f"State: {status_color}{obj.get('state')}\033[0m | AI Score: {score_color}{anomaly_score:.2f}\033[0m"
+                  f"{breach_alert}{lockdown_tag}")
 
         # 2. Asynchronous Security Events (Access granted, bad PIN, auto-lock, badge, etc.)
         elif msg_type == "event":
@@ -435,80 +467,156 @@ class SmartSafeGateway:
             cmd = obj.get("cmd")
 
             event_desc = None
-            audit_state = self.last_known_state or "LOCKED"
+            audit_state = "LOCKED"
             is_significant = True
+            log_category = "EVENT"
+
+            # Case 0: Security Auth Failed (Suppress if rogue badge or bad pin was already logged within 2.0s)
+            if event_name == "auth_failed":
+                if (time.time() - self._last_rogue_badge_time) < 2.0:
+                    is_significant = False
+                else:
+                    att = obj.get("attempt", 1)
+                    max_att = obj.get("max", 3)
+                    event_desc = f"Security Alert: Failed Authentication ({att}/{max_att})"
+                    audit_state = "LOCKED"
+                    log_category = "SECURITY"
 
             # Case A: ESP-NOW Badge events
-            if source == "badge_espnow" or "badge" in source:
-                badge_name = obj.get("badge") or "#01-ADMIN"
+            elif source in ("badge_espnow", "badge"):
                 if obj.get("alert") == "ROGUE_BADGE_DETECTED" or cmd == "FAKE_BADGE" or result == "denied_unauthorized":
                     rogue_mac = obj.get("rogue_mac", "")
-                    mac_info = f" [{rogue_mac}]" if rogue_mac else ""
-                    event_desc = f"🚨 ROGUE BADGE REJECTED{mac_info}"
+                    mac_info = f" ({rogue_mac})" if rogue_mac else ""
+                    event_desc = f"Rogue Badge Rejected{mac_info}"
+                    audit_state = "LOCKED"
+                    self._last_rogue_badge_time = time.time()
                     self.mock_state["last_badge"] = "ROGUE BADGE (DENIED)"
                     self.mock_state["espnow_link"] = "ACTIVE (Unauthorized RX)"
+                    log_category = "SECURITY"
                 elif cmd == "UNLOCK":
-                    event_desc = f"Door Unlocked via Badge ({badge_name})"
-                    audit_state = "UNLOCKED"
-                    self.last_known_state = "UNLOCKED"
-                    self._last_unlock_event_time = time.time()
-                    self.mock_state["last_badge"] = f"{badge_name} (GRANTED)"
-                    self.mock_state["espnow_link"] = "ACTIVE (-58 dBm)"
+                    if result == "already_open":
+                        event_desc = "Badge Unlock Denied: Already Unlocked"
+                        audit_state = "UNLOCKED"
+                        log_category = "ACCESS"
+                    elif result == "denied_no_presence":
+                        event_desc = "Badge Denied: Approach Vault First"
+                        audit_state = "LOCKED"
+                        log_category = "SECURITY"
+                    elif result == "denied_lockdown":
+                        event_desc = "Badge Denied: System in Lockdown"
+                        audit_state = "LOCKED"
+                        log_category = "SECURITY"
+                    else:
+                        event_desc = "Door Unlocked via Badge"
+                        audit_state = "UNLOCKED"
+                        self.last_known_state = "UNLOCKED"
+                        self._last_unlock_event_time = time.time()
+                        self.mock_state["last_badge"] = "AUTHORIZED BADGE"
+                        self.mock_state["espnow_link"] = "ACTIVE (-58 dBm)"
+                        log_category = "ACCESS"
                 elif cmd == "LOCK":
-                    event_desc = f"Door Locked via Badge ({badge_name})"
-                    audit_state = "LOCKED"
-                    self.last_known_state = "LOCKED"
-                    self._last_lock_event_time = time.time()
-                    self.mock_state["last_badge"] = f"{badge_name} (LOCKED)"
-                    self.mock_state["espnow_link"] = "ACTIVE (-58 dBm)"
+                    if result == "already_locked":
+                        event_desc = "Badge Lock Denied: Already Locked"
+                        audit_state = "LOCKED"
+                        log_category = "LOCK"
+                    else:
+                        event_desc = "Door Locked via Badge"
+                        audit_state = "LOCKED"
+                        self.last_known_state = "LOCKED"
+                        self._last_lock_event_time = time.time()
+                        self.mock_state["last_badge"] = "AUTHORIZED BADGE"
+                        self.mock_state["espnow_link"] = "ACTIVE (-58 dBm)"
+                        log_category = "LOCK"
                 elif cmd == "ACK_BREACH":
-                    event_desc = f"Breach Alarm Acknowledged via Badge ({badge_name})"
+                    event_desc = "Breach Alarm Acknowledged (Badge)"
+                    audit_state = "LOCKED"
                     self.last_breach_state = False
-                    self.mock_state["last_badge"] = f"{badge_name} (ACK_BREACH)"
+                    self.mock_state["last_badge"] = "AUTHORIZED BADGE"
+                    log_category = "SECURITY"
                 elif cmd == "PAIR_REQ":
-                    event_desc = "Pairing Request Received from Badge"
-                    self.mock_state["last_badge"] = "PAIRING REQ"
+                    event_desc = "Pairing Request Received (Badge)"
+                    audit_state = "LOCKED"
+                    log_category = "PAIRING"
                 else:
-                    event_desc = f"Badge Action '{cmd or action}' ({badge_name})"
+                    act_name = cmd or action or result or event_name
+                    if not act_name or str(act_name).strip().lower() in ("none", "", "no_alert_to_ack"):
+                        is_significant = False
+                    else:
+                        clean_name = str(act_name).replace('_', ' ').strip().title()
+                        event_desc = f"Badge Action: {clean_name}"
+                        audit_state = "LOCKED"
+                        log_category = "BADGE"
 
             # Case B: Hardware / NVS Pairing events
-            elif source == "pairing":
+            elif source in ("pairing", "vault") and action in ("pairing_mode_started", "badge_paired", "pair_denied_window_closed"):
                 if action == "pairing_mode_started":
-                    event_desc = f"Pairing Mode Active ({obj.get('window_sec', 15)}s Window)"
+                    sec = obj.get("window_sec", 15)
+                    event_desc = f"Pairing Mode Active ({sec}s Window)"
+                    audit_state = "LOCKED"
+                    log_category = "PAIRING"
                 elif action == "badge_paired":
                     mac = obj.get("mac", "")
                     event_desc = f"Badge Paired Successfully (MAC: {mac})"
+                    audit_state = "LOCKED"
+                    log_category = "PAIRING"
                 elif action == "pair_denied_window_closed":
                     event_desc = "Pairing Denied: Timeout Window Expired"
-                else:
-                    event_desc = f"Pairing: {action}"
+                    audit_state = "LOCKED"
+                    log_category = "PAIRING"
 
             # Case C: IR PIN Keypad events
             elif source == "ir_pin":
-                if action in ("digit", "backspace"):
-                    # Intermediate keypress while entering PIN - skip audit spam
+                if action == "digit":
+                    ent = obj.get("entered", 1)
+                    if self.debug_mode:
+                        print(f"{self._ts()} [KEYPAD] IR PIN: Digit entered ({ent}/4)")
+                    is_significant = False
+                elif action == "backspace":
+                    rem = obj.get("remaining", 0)
+                    if self.debug_mode:
+                        print(f"{self._ts()} [KEYPAD] IR PIN: Backspace pressed ({rem}/4 remaining)")
                     is_significant = False
                 elif result == "granted":
                     event_desc = "Door Unlocked via PIN Code (IR Remote)"
                     audit_state = "UNLOCKED"
                     self.last_known_state = "UNLOCKED"
                     self._last_unlock_event_time = time.time()
+                    log_category = "ACCESS"
                 elif result == "denied":
                     event_desc = "PIN Access Denied: Incorrect Code"
+                    audit_state = "LOCKED"
+                    self._last_rogue_badge_time = time.time()
+                    log_category = "SECURITY"
                 elif result == "denied_lockdown":
                     event_desc = "PIN Access Denied: System in Lockdown"
+                    audit_state = "LOCKED"
+                    log_category = "SECURITY"
                 elif result == "denied_no_presence":
                     event_desc = "PIN Access Denied: Approach Vault First"
+                    audit_state = "LOCKED"
+                    log_category = "SECURITY"
                 elif action == "canceled":
                     event_desc = "PIN Entry Canceled by User"
+                    audit_state = "LOCKED"
+                    log_category = "KEYPAD"
                 elif action == "timeout_cleared":
                     event_desc = "PIN Entry Timeout (Cleared)"
+                    audit_state = "LOCKED"
+                    log_category = "KEYPAD"
                 elif action == "pin_changed":
                     event_desc = "Master PIN Code Updated"
-                elif action in ("change_prompt", "enter_old_pin"):
-                    is_significant = False
+                    audit_state = "LOCKED"
+                    log_category = "SECURITY"
+                elif result == "denied_wrong_old_pin":
+                    event_desc = "PIN Change Denied: Incorrect Current PIN"
+                    audit_state = "LOCKED"
+                    log_category = "SECURITY"
+                elif action == "change_canceled":
+                    event_desc = "PIN Change Canceled"
+                    audit_state = "LOCKED"
+                    log_category = "KEYPAD"
                 else:
-                    event_desc = f"PIN {action or result}"
+                    is_significant = False
 
             # Case D: IR Remote general events
             elif source == "ir_remote":
@@ -517,77 +625,146 @@ class SmartSafeGateway:
                     audit_state = "LOCKED"
                     self.last_known_state = "LOCKED"
                     self._last_lock_event_time = time.time()
+                    log_category = "LOCK"
                 elif action == "breach_acknowledged":
                     event_desc = "Breach Alarm Acknowledged (IR Remote)"
+                    audit_state = "LOCKED"
                     self.last_breach_state = False
+                    log_category = "SECURITY"
                 elif result == "denied_no_presence":
                     event_desc = "IR Command Denied: Approach Vault First"
+                    audit_state = "LOCKED"
+                    log_category = "SECURITY"
                 else:
-                    # Raw button press info (key navigation, etc.) - skip audit spam
                     is_significant = False
 
             # Case E: Generic System / Vault State events
-            elif event_name == "access" and obj.get("status") == "granted":
-                # Suppress duplicate "access (system)" if an unlock event was already logged within 2s
+            elif event_name == "approach":
+                dist = obj.get("distance_cm", 0.0)
+                if self.debug_mode:
+                    print(f"{self._ts()} [RADAR] Person detected approaching ({dist:.1f} cm) -> Safe Armed")
+                is_significant = False
+
+            elif (event_name == "access" and obj.get("status") == "granted") or (not event_name and source == "system" and action == "unlock"):
                 if (time.time() - self._last_unlock_event_time) < 2.0:
                     is_significant = False
-                else:
-                    event_desc = "Door Unlocked (Physical Access)"
+                elif (time.time() - self._pending_operator_unlock) < 2.5:
+                    event_desc = "Door Unlocked (Web / Cloud)"
                     audit_state = "UNLOCKED"
                     self.last_known_state = "UNLOCKED"
+                    self._last_unlock_event_time = time.time()
+                    log_category = "ACCESS"
+                elif action == "unlock":
+                    event_desc = "Door Unlocked (USB CLI)"
+                    audit_state = "UNLOCKED"
+                    self.last_known_state = "UNLOCKED"
+                    self._last_unlock_event_time = time.time()
+                    log_category = "ACCESS"
+                else:
+                    is_significant = False
+
+            elif source == "system" and action == "manual_lock":
+                if (time.time() - self._pending_operator_lock) < 2.5:
+                    event_desc = "Door Locked (Web / Cloud)"
+                else:
+                    event_desc = "Door Locked (USB CLI)"
+                audit_state = "LOCKED"
+                self.last_known_state = "LOCKED"
+                self._last_lock_event_time = time.time()
+                log_category = "LOCK"
 
             elif event_name == "auto_locked":
                 event_desc = "Auto-Lock Timer Expired (Door Locked)"
                 audit_state = "LOCKED"
                 self.last_known_state = "LOCKED"
                 self._last_lock_event_time = time.time()
+                log_category = "LOCK"
 
             elif event_name == "breach":
                 sensor = obj.get("source", "ldr").upper()
-                event_desc = f"🚨 SECURITY BREACH: Internal {sensor} Sensor Tripped!"
+                light_adc = obj.get("light_adc", 0)
+                event_desc = f"Security Breach: Internal {sensor} Sensor Tripped (ADC={light_adc})"
+                audit_state = "LOCKED"
                 self.last_breach_state = True
+                log_category = "ALARM"
 
             elif event_name == "breach_acknowledged":
-                event_desc = "Breach Alarm Acknowledged"
+                if (time.time() - self._pending_operator_ack) < 2.5:
+                    event_desc = "Breach Alarm Acknowledged (Web / Cloud)"
+                else:
+                    event_desc = "Breach Alarm Acknowledged"
+                audit_state = "LOCKED"
                 self.last_breach_state = False
+                log_category = "SECURITY"
 
             elif event_name == "lockdown_enabled":
-                event_desc = "🛑 EMERGENCY LOCKDOWN ARMED"
-                audit_state = "LOCKED"
-                self.last_known_state = "LOCKED"
+                # Suppress if triggered within 2.0s of bruteforce alarm (bruteforce already logged the incident)
+                if (time.time() - self._last_bruteforce_time) < 2.0:
+                    is_significant = False
+                elif (time.time() - self._pending_operator_lockdown) < 2.5:
+                    event_desc = "Emergency Lockdown Armed (Web / Cloud)"
+                    audit_state = "LOCKED"
+                    self.last_known_state = "LOCKED"
+                    log_category = "LOCKDOWN"
+                else:
+                    event_desc = "Emergency Lockdown Armed"
+                    audit_state = "LOCKED"
+                    self.last_known_state = "LOCKED"
+                    log_category = "LOCKDOWN"
 
             elif event_name == "lockdown_disabled":
-                event_desc = "Emergency Lockdown Cleared"
+                if (time.time() - self._pending_operator_lockdown) < 2.5:
+                    event_desc = "Emergency Lockdown Cleared (Web / Cloud)"
+                else:
+                    event_desc = "Emergency Lockdown Cleared"
+                audit_state = "LOCKED"
+                self.last_known_state = "LOCKED"
+                log_category = "SECURITY"
 
             elif event_name == "lockdown_blocked":
-                event_desc = "Unlock Blocked: System in Lockdown"
-
-            elif event_name == "auth_failed":
-                att = obj.get("attempt", "?")
-                max_att = obj.get("max", 3)
-                src = obj.get("source", "keypad")
-                event_desc = f"⚠️ Security Alert: Failed Auth Attempt ({att}/{max_att}) via {src}"
-
-            elif event_name == "approach":
-                # Sonar radar detection - reflected in telemetry, skip audit spam
-                is_significant = False
+                if (time.time() - self._pending_operator_unlock) < 2.5:
+                    event_desc = "Unlock Denied: System in Lockdown (Web / Cloud)"
+                else:
+                    event_desc = "Unlock Denied: System in Lockdown"
+                audit_state = "LOCKED"
+                log_category = "SECURITY"
 
             else:
-                raw_act = action or result or event_name or cmd or "unknown"
-                event_desc = f"{raw_act} ({source})"
+                raw_act = action or result or event_name or cmd
+                if not raw_act or str(raw_act).strip().lower() in ("none", "", "no_alert_to_ack", "change_prompt", "enter_old_pin", "cleared"):
+                    is_significant = False
+                else:
+                    clean_name = str(raw_act).replace('_', ' ').strip().title()
+                    event_desc = f"System Event: {clean_name}"
+                    audit_state = "LOCKED"
 
             if is_significant and event_desc:
-                print(f"\033[96m[AUDIT EVENT] {event_desc} | State: {audit_state}\033[0m")
+                now_t = time.time()
+                last_t = self._recent_events.get(event_desc, 0)
+                if (now_t - last_t) < 1.5:
+                    if self.debug_mode:
+                        print(f"{self._ts()} [DEBUG DEDUP] Ignored duplicate event within 1.5s: '{event_desc}'")
+                    return
+
+                self._recent_events[event_desc] = now_t
+                if len(self._recent_events) > 30:
+                    self._recent_events = {k: v for k, v in self._recent_events.items() if (now_t - v) < 5.0}
+
+                # Guarantee strict binary Door State (LOCKED or UNLOCKED)
+                if audit_state not in ("LOCKED", "UNLOCKED"):
+                    audit_state = "UNLOCKED" if (self.last_known_state == "UNLOCKED") else "LOCKED"
+
+                print(f"{self._ts()} [{log_category}] {event_desc} | State: {audit_state}")
                 event_payload = {
                     "audit_state": audit_state,
-                    "audit_event": event_desc,
-                    "last_badge": self.mock_state.get("last_badge", "None"),
-                    "espnow_link": self.mock_state.get("espnow_link", "ACTIVE (-58 dBm)"),
-                    "state": audit_state
+                    "audit_event": event_desc
                 }
                 if self.mqtt_client and self.mqtt_connected:
                     try:
-                        self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps(event_payload))
+                        p_json = json.dumps(event_payload)
+                        self.mqtt_client.publish("v1/devices/me/telemetry", p_json)
+                        if self.debug_mode:
+                            print(f"{self._ts()} [DEBUG MQTT TX] v1/devices/me/telemetry -> {p_json}")
                     except Exception as pe:
                         print(f"[WARN] Failed to publish audit event: {pe}")
 
@@ -595,14 +772,26 @@ class SmartSafeGateway:
         elif msg_type == "alarm":
             alarm_name = obj.get("alarm", "unknown_alarm")
             action = obj.get("action", "")
-            print(f"\033[91;1m[CRITICAL ALARM] {alarm_name.upper()} | Action: {action}\033[0m")
-            alarm_desc = f"CRITICAL ALARM: {alarm_name}"
-            self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({
+            if alarm_name == "bruteforce_detected":
+                self._last_bruteforce_time = time.time()
+                event_desc = "Security Alarm: Bruteforce Lockout Engaged (60s)"
+            else:
+                clean_name = str(alarm_name).replace('_', ' ').strip().title()
+                event_desc = f"Security Alarm: {clean_name}"
+
+            audit_state = "LOCKED"
+            print(f"{self._ts()} [ALARM] {event_desc} | State: {audit_state}")
+            alarm_payload = {
                 "critical_alarm": alarm_name,
                 "alarm_active": True,
-                "audit_state": self.last_known_state or "LOCKED",
-                "audit_event": alarm_desc
-            }))
+                "audit_state": audit_state,
+                "audit_event": event_desc
+            }
+            if self.mqtt_client and self.mqtt_connected:
+                p_json = json.dumps(alarm_payload)
+                self.mqtt_client.publish("v1/devices/me/telemetry", p_json)
+                if self.debug_mode:
+                    print(f"{self._ts()} [DEBUG MQTT TX] v1/devices/me/telemetry -> {p_json}")
 
     def run_mock_loop(self):
         """Simulates periodic YoloUNO telemetry for standalone testing."""
@@ -718,6 +907,8 @@ def main():
                         help="Serial baudrate (default: 115200)")
     parser.add_argument("--mock", action="store_true",
                         help="Run with mock telemetry (no hardware required)")
+    parser.add_argument("--debug", "--verbose", "-v", action="store_true",
+                        help="Enable verbose debug logging (displays raw serial packets and MQTT traffic)")
 
     args = parser.parse_args()
 
@@ -730,7 +921,8 @@ def main():
         fallback_host=args.fallback_host,
         serial_port=args.serial_port,
         baudrate=args.baudrate,
-        mock=args.mock
+        mock=args.mock,
+        debug=args.debug
     )
     gateway.run()
 

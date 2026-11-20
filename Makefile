@@ -125,9 +125,10 @@ gateway/.venv/bin/python:
 	gateway/.venv/bin/pip install -r gateway/requirements.txt
 
 HOST ?= auto
+ARGS ?=
 
-run-gateway: gateway/.venv/bin/python ## Start Python Gateway (auto-discovers ThingsBoard, or override with HOST=1.2.3.4)
-	gateway/.venv/bin/python gateway/gateway.py --host $(HOST) --port 1883 --token 6EzRR6gcTvnOcgVF53hP
+run-gateway: gateway/.venv/bin/python ## Start Python Gateway (auto-discovers ThingsBoard, override with HOST=1.2.3.4 ARGS="--debug")
+	gateway/.venv/bin/python gateway/gateway.py --host $(HOST) --port 1883 --token 6EzRR6gcTvnOcgVF53hP $(ARGS)
 
 beacon: ## Run ThingsBoard UDP discovery beacon in foreground
 	python3 scripts/tb_beacon.py
