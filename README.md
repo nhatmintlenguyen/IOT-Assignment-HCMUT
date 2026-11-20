@@ -287,3 +287,59 @@ curl -X POST "http://localhost:8080/api/v1/6EzRR6gcTvnOcgVF53hP/telemetry" \
   -H "Content-Type: application/json" \
   -d '{"temp": 28.5, "hum": 65.2, "light_adc": 140, "distance_cm": 42.0, "state": "LOCKED", "breach": false, "lockdown": false}'
 ```
+
+---
+
+## 8. Hardware Flashing & Execution Guide (PlatformIO)
+
+### 8.1 Prerequisites & PlatformIO Setup
+The PlatformIO Core CLI is symlinked into `~/.local/bin/pio` and directly available in your terminal:
+```bash
+pio --version
+# Should output: PlatformIO Core, version 6.2.0 (or higher)
+```
+
+### 8.2 Flashing Microcontrollers via Makefile or CLI
+
+#### 1. Central Vault Controller (YoloUNO - ESP32-S3)
+Connect the YoloUNO to your computer via USB-C (usually appears as `/dev/ttyACM0`):
+```bash
+# Using Makefile:
+make flash-vault
+
+# Or using raw PlatformIO:
+pio run -d firmware/vault_yolouno -t upload
+
+# Inspect runtime logs (115200 baud):
+make monitor-vault
+# Or: pio device monitor -d firmware/vault_yolouno -b 115200
+```
+
+#### 2. Wearable Security Badge (Yolo:Bit - ESP32)
+Connect the Yolo:Bit via USB (usually appears as `/dev/ttyUSB0`):
+```bash
+# Using Makefile:
+make flash-badge
+
+# Or using raw PlatformIO:
+pio run -d firmware/badge_yolobit -t upload
+
+# Inspect runtime logs (115200 baud):
+make monitor-badge
+# Or: pio device monitor -d firmware/badge_yolobit -b 115200
+```
+
+### 8.3 Running the Local Gateway (PC / Raspberry Pi Zero 2W)
+Once the YoloUNO is connected via USB, launch the Python Gateway bridge:
+```bash
+# Using Makefile:
+make run-gateway
+
+# Or using the dedicated venv directly:
+gateway/.venv/bin/python gateway/gateway.py --host localhost --port 1883 --token 6EzRR6gcTvnOcgVF53hP
+```
+*Auto-detection:* The gateway automatically discovers `/dev/ttyACM*` or `/dev/ttyUSB*` ports. To target a specific port:
+```bash
+gateway/.venv/bin/python gateway/gateway.py --serial-port /dev/ttyACM0 --host localhost --token 6EzRR6gcTvnOcgVF53hP
+```
+

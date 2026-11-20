@@ -3,10 +3,31 @@ TB      := thingsboard-ce
 # Set LOAD_DEMO=true to also create tenant@thingsboard.org and demo devices.
 LOAD_DEMO ?= false
 
-.PHONY: help env init up down restart logs ps tunnel tunnel-down reset
+.PHONY: help env init up down restart logs ps tunnel tunnel-down reset build-vault flash-vault monitor-vault build-badge flash-badge monitor-badge run-gateway
 
 help: ## List commands
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/ -/'
+
+build-vault: ## Build YoloUNO vault firmware
+	pio run -d firmware/vault_yolouno
+
+flash-vault: ## Flash YoloUNO vault firmware (auto-detects port)
+	pio run -d firmware/vault_yolouno -t upload
+
+monitor-vault: ## Open serial monitor for YoloUNO (115200 baud)
+	pio device monitor -d firmware/vault_yolouno -b 115200
+
+build-badge: ## Build Yolo:Bit badge firmware
+	pio run -d firmware/badge_yolobit
+
+flash-badge: ## Flash Yolo:Bit badge firmware (auto-detects port)
+	pio run -d firmware/badge_yolobit -t upload
+
+monitor-badge: ## Open serial monitor for Yolo:Bit (115200 baud)
+	pio device monitor -d firmware/badge_yolobit -b 115200
+
+run-gateway: ## Start Python Gateway connected to ThingsBoard & YoloUNO
+	gateway/.venv/bin/python gateway/gateway.py --host localhost --port 1883 --token 6EzRR6gcTvnOcgVF53hP
 
 env: ## Create .env from .env.example if missing
 	@test -f .env || (cp .env.example .env && echo ".env created")
