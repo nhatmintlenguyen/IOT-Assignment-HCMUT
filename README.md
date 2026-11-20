@@ -304,29 +304,29 @@ pio --version
 #### 1. Central Vault Controller (YoloUNO - ESP32-S3)
 Connect the YoloUNO to your computer via USB-C (usually appears as `/dev/ttyACM0`):
 ```bash
-# Using Makefile:
+# Standard flash:
 make flash-vault
 
-# Or using raw PlatformIO:
-pio run -d firmware/vault_yolouno -t upload
+# Flash and immediately open serial monitor in one go:
+make flash-vault monitor
+# (Or shortcut: make flash-vault-monitor)
 
-# Inspect runtime logs (115200 baud):
+# Inspect runtime logs separately (115200 baud):
 make monitor-vault
-# Or: pio device monitor -d firmware/vault_yolouno -b 115200
 ```
 
 #### 2. Wearable Security Badge (Yolo:Bit - ESP32)
 Connect the Yolo:Bit via USB (usually appears as `/dev/ttyUSB0`):
 ```bash
-# Using Makefile:
+# Standard flash:
 make flash-badge
 
-# Or using raw PlatformIO:
-pio run -d firmware/badge_yolobit -t upload
+# Flash and immediately open serial monitor in one go:
+make flash-badge monitor
+# (Or shortcut: make flash-badge-monitor)
 
-# Inspect runtime logs (115200 baud):
+# Inspect runtime logs separately (115200 baud):
 make monitor-badge
-# Or: pio device monitor -d firmware/badge_yolobit -b 115200
 ```
 
 ### 8.3 Running the Local Gateway (PC / Raspberry Pi Zero 2W)

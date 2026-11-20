@@ -14,7 +14,11 @@ DETECTED_BADGE_PORT := $(shell ls /dev/ttyUSB* 2>/dev/null | head -n 1)
 VAULT_PORT ?= $(if $(PORT),$(PORT),$(DETECTED_VAULT_PORT))
 BADGE_PORT ?= $(if $(PORT),$(PORT),$(DETECTED_BADGE_PORT))
 
-.PHONY: help env init up down restart logs ps tunnel tunnel-down reset check-pio install-pio ports build-vault flash-vault monitor-vault build-badge flash-badge monitor-badge run-gateway
+# Detect if 'monitor' is requested in the command line (e.g. make flash-vault monitor)
+MONITOR_REQUESTED := $(if $(filter monitor,$(MAKECMDGOALS)),1,$(if $(MONITOR),1,0))
+MONITOR_TARGET    := $(if $(filter 1,$(MONITOR_REQUESTED)),-t monitor,)
+
+.PHONY: help env init up down restart logs ps tunnel tunnel-down reset check-pio install-pio ports build-vault flash-vault flash-vault-monitor monitor-vault build-badge flash-badge flash-badge-monitor monitor-badge run-gateway setup-rpi-service monitor
 
 help: ## List commands
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/ -/'
@@ -60,13 +64,16 @@ ports: ## List connected microcontroller USB ports (identifies YoloUNO vs Yolo:B
 build-vault: check-pio ## Build YoloUNO vault firmware
 	$(PIO) run -d firmware/vault_yolouno
 
-flash-vault: check-pio ## Flash YoloUNO vault firmware (target: VAULT_PORT or PORT=...)
+flash-vault: check-pio ## Flash YoloUNO (add 'monitor' to stream serial logs: make flash-vault monitor)
 	@if [ -z "$(VAULT_PORT)" ]; then \
 		echo "\033[91m[ERROR] No YoloUNO (/dev/ttyACM*) port found. Specify manually with: make flash-vault PORT=/dev/tty...\033[0m"; \
 		exit 1; \
 	fi
-	@echo "\033[92m[FLASH] Flashing YoloUNO Vault on $(VAULT_PORT)...\033[0m"
-	$(PIO) run -d firmware/vault_yolouno -t upload --upload-port $(VAULT_PORT)
+	@echo "\033[92m[FLASH] Flashing YoloUNO Vault on $(VAULT_PORT)$(if $(MONITOR_TARGET), + opening Serial Monitor,)...\033[0m"
+	$(PIO) run -d firmware/vault_yolouno -t upload $(MONITOR_TARGET) --upload-port $(VAULT_PORT) $(if $(MONITOR_TARGET),--monitor-port $(VAULT_PORT),)
+
+flash-vault-monitor: ## Flash YoloUNO and open serial monitor
+	@$(MAKE) flash-vault monitor
 
 monitor-vault: check-pio ## Open serial monitor for YoloUNO (115200 baud)
 	@if [ -z "$(VAULT_PORT)" ]; then \
@@ -78,13 +85,16 @@ monitor-vault: check-pio ## Open serial monitor for YoloUNO (115200 baud)
 build-badge: check-pio ## Build Yolo:Bit badge firmware
 	$(PIO) run -d firmware/badge_yolobit
 
-flash-badge: check-pio ## Flash Yolo:Bit badge firmware (target: BADGE_PORT or PORT=...)
+flash-badge: check-pio ## Flash Yolo:Bit (add 'monitor' to stream serial logs: make flash-badge monitor)
 	@if [ -z "$(BADGE_PORT)" ]; then \
 		echo "\033[91m[ERROR] No Yolo:Bit (/dev/ttyUSB*) port found. Specify manually with: make flash-badge PORT=/dev/tty...\033[0m"; \
 		exit 1; \
 	fi
-	@echo "\033[94m[FLASH] Flashing Yolo:Bit Badge on $(BADGE_PORT)...\033[0m"
-	$(PIO) run -d firmware/badge_yolobit -t upload --upload-port $(BADGE_PORT)
+	@echo "\033[94m[FLASH] Flashing Yolo:Bit Badge on $(BADGE_PORT)$(if $(MONITOR_TARGET), + opening Serial Monitor,)...\033[0m"
+	$(PIO) run -d firmware/badge_yolobit -t upload $(MONITOR_TARGET) --upload-port $(BADGE_PORT) $(if $(MONITOR_TARGET),--monitor-port $(BADGE_PORT),)
+
+flash-badge-monitor: ## Flash Yolo:Bit and open serial monitor
+	@$(MAKE) flash-badge monitor
 
 monitor-badge: check-pio ## Open serial monitor for Yolo:Bit (115200 baud)
 	@if [ -z "$(BADGE_PORT)" ]; then \
@@ -92,6 +102,9 @@ monitor-badge: check-pio ## Open serial monitor for Yolo:Bit (115200 baud)
 		exit 1; \
 	fi
 	$(PIO) device monitor -d firmware/badge_yolobit -p $(BADGE_PORT) -b 115200
+
+monitor: ## Auxiliary target to enable 'make flash-* monitor' chaining
+	@:
 
 run-gateway: ## Start Python Gateway connected to ThingsBoard & YoloUNO
 	gateway/.venv/bin/python gateway/gateway.py --host localhost --port 1883 --token 6EzRR6gcTvnOcgVF53hP
