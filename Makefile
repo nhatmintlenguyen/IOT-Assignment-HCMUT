@@ -96,13 +96,17 @@ monitor-badge: check-pio ## Open serial monitor for Yolo:Bit (115200 baud)
 run-gateway: ## Start Python Gateway connected to ThingsBoard & YoloUNO
 	gateway/.venv/bin/python gateway/gateway.py --host localhost --port 1883 --token 6EzRR6gcTvnOcgVF53hP
 
-setup-rpi-service: ## Install and enable systemd auto-update service on Raspberry Pi
-	@echo "[INFO] Installing systemd service on Raspberry Pi..."
+setup-rpi-service: ## Install and enable systemd gateway and 5-min auto-update timer on Raspberry Pi
+	@echo "[INFO] Installing systemd gateway service and auto-update timer..."
 	sed "s|%h|$$HOME|g" scripts/smart-safe-gateway.service | sudo tee /etc/systemd/system/smart-safe-gateway.service >/dev/null
+	sed "s|%h|$$HOME|g" scripts/smart-safe-autoupdate.service | sudo tee /etc/systemd/system/smart-safe-autoupdate.service >/dev/null
+	sudo cp scripts/smart-safe-autoupdate.timer /etc/systemd/system/smart-safe-autoupdate.timer
 	sudo systemctl daemon-reload
 	sudo systemctl enable --now smart-safe-gateway.service
-	@echo "\033[92m[SUCCESS] smart-safe-gateway.service installed and started!\033[0m"
-	@echo "Check status with: sudo systemctl status smart-safe-gateway.service"
+	sudo systemctl enable --now smart-safe-autoupdate.timer
+	@echo "\033[92m[SUCCESS] Gateway and 5-min auto-update timer successfully installed!\033[0m"
+	@echo "Check gateway status : sudo systemctl status smart-safe-gateway.service"
+	@echo "Check timer status   : sudo systemctl list-timers | grep smart-safe"
 
 env: ## Create .env from .env.example if missing
 	@test -f .env || (cp .env.example .env && echo ".env created")

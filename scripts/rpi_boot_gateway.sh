@@ -11,20 +11,15 @@ cd "$REPO_DIR"
 
 echo "=== [SMART SAFE RPI BOOT] Starting Auto-Update & Launch ==="
 
-# 1. Wait for network connectivity (up to 30s)
-echo "[INFO] Waiting for network..."
-for i in $(seq 1 30); do
-    if ping -c 1 -W 1 1.1.1.1 >/dev/null 2>&1 || ping -c 1 -W 1 8.8.8.8 >/dev/null 2>&1; then
-        echo "[INFO] Network connection verified."
-        break
-    fi
-    sleep 1
-done
-
-# 2. Pull latest changes from origin/main
-echo "[INFO] Pulling latest code from origin/main..."
-git fetch origin main || true
-git reset --hard origin/main || git pull origin main || true
+# 1. Non-blocking network check (max 2 seconds)
+echo "[INFO] Checking network connectivity..."
+if ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1 || ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1; then
+    echo "[INFO] Network online. Fetching latest origin/main..."
+    git fetch origin main >/dev/null 2>&1 && git reset --hard origin/main >/dev/null 2>&1 || true
+else
+    echo "[WARN] Network offline at boot. Starting gateway immediately using local code."
+    echo "[INFO] Periodic timer (smart-safe-autoupdate.timer) will auto-pull whenever Wi-Fi connects."
+fi
 
 # 3. Setup Python venv on Raspberry Pi if not present
 if [ ! -d "gateway/.venv" ]; then

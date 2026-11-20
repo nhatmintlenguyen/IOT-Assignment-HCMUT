@@ -1,0 +1,8 @@
+[Unit]
+Description=Smart Safe Guardian Periodic Auto-Update Service
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/IOT-Assignment-HCMUT
+ExecStart=%h/IOT-Assignment-HCMUT/scripts/rpi_check_update.sh
