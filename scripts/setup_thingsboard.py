@@ -236,7 +236,7 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
         cfg["dropShadow"] = True
         cfg["widgetCss"] = ".tb-time-series-chart-widget th, .tb-time-series-chart-widget td, .tb-legend-header, .legend-header { color: #ffffff !important; opacity: 1 !important; }"
 
-        def make_axis(aid, label, color, position, order, units='', decimals=0, show_split=False, min_val=None, max_val=None):
+        def make_axis(aid, label, color, position, order, units='', decimals=0, show_split=False, min_val=None, max_val=None, interval=None, split_number=None):
             ax = {
                 "id": aid,
                 "order": order,
@@ -262,6 +262,10 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
                 ax["min"] = min_val
             if max_val is not None:
                 ax["max"] = max_val
+            if interval is not None:
+                ax["interval"] = interval
+            if split_number is not None:
+                ax["splitNumber"] = split_number
             return ax
 
         cfg["settings"]["background"] = {
@@ -277,6 +281,7 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
         cfg["settings"]["legendValueFont"] = {"family": "Roboto", "size": 12, "sizeUnit": "px", "style": "normal", "weight": "500", "lineHeight": "16px"}
         cfg["settings"]["tooltipValueColor"] = "#ffffff"
         cfg["settings"]["tooltipDateColor"] = "#ffffff"
+        cfg["settings"]["tooltipLabelColor"] = "#ffffff"
         cfg["settings"]["tooltipBackgroundColor"] = "rgba(18, 27, 45, 0.95)"
 
         if "xAxis" in cfg["settings"]:
@@ -287,10 +292,10 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
             cfg["settings"]["xAxis"]["splitLinesColor"] = "rgba(255, 255, 255, 0.05)"
 
         cfg["settings"]["yAxes"] = {
-            "axis_light": make_axis("axis_light", "Light (ADC)", "#fbbf24", "left", 0, "ADC", 0, show_split=True),
-            "axis_dist": make_axis("axis_dist", "Distance (cm)", "#2dd4bf", "left", 1, "cm", 0),
+            "axis_light": make_axis("axis_light", "Light (ADC)", "#fbbf24", "left", 0, "ADC", 0, show_split=True, min_val=0),
+            "axis_dist": make_axis("axis_dist", "Distance (cm)", "#2dd4bf", "left", 1, "cm", 0, min_val=0),
             "axis_temp": make_axis("axis_temp", "Temp (°C)", "#fb923c", "right", 0, "°C", 1),
-            "axis_ai": make_axis("axis_ai", "AI Score", "#818cf8", "right", 1, "", 2, min_val=0, max_val=1)
+            "axis_ai": make_axis("axis_ai", "AI Score", "#818cf8", "right", 1, "", 2, min_val=0, max_val=1, interval=0.2, split_number=5)
         }
 
         datakeys = []
@@ -380,7 +385,7 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
         c["settings"]["showTimestamp"] = True
         c["settings"]["dateFormat"] = {"format": "HH:mm:ss"}
         c["settings"]["displayPagination"] = True
-        c["settings"]["defaultPageSize"] = 5
+        c["settings"]["defaultPageSize"] = 10
         c["settings"]["enableSearch"] = False
         c["settings"]["enableSelectColumnDisplay"] = False
         c["settings"]["enableStickyHeader"] = True
@@ -544,8 +549,17 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
                 "showDashboardExport": True,
                 "toolbarAlwaysOpen": True,
                 "titleColor": "#ffffff",
-                "dashboardCss": "th.mat-mdc-header-cell, th.mat-header-cell, .tb-time-series-chart-widget th, .tb-legend-header, .legend-header { color: #ffffff !important; opacity: 1 !important; }"
-            }
+                "dashboardCss": (
+                    "th.mat-mdc-header-cell, th.mat-header-cell, .tb-time-series-chart-widget th, .tb-legend-header, .legend-header { color: #ffffff !important; opacity: 1 !important; }\n"
+                    ".mat-mdc-tooltip, .mat-tooltip, .tb-tooltip, .tb-time-series-chart-tooltip, .tb-chart-tooltip, .echarts-tooltip, .tooltip, div[class*='tooltip'], div[class*='tooltip'] *, .mat-mdc-tooltip .mdc-tooltip__surface, .tb-time-series-chart-tooltip * { color: #ffffff !important; }\n"
+                    ".mat-mdc-tooltip .mdc-tooltip__surface, .tb-time-series-chart-tooltip, .echarts-tooltip { background-color: rgba(18, 27, 45, 0.95) !important; border: 1px solid rgba(255, 255, 255, 0.15) !important; }"
+                )
+            },
+            "widgetsCss": (
+                "th.mat-mdc-header-cell, th.mat-header-cell, .tb-time-series-chart-widget th, .tb-legend-header, .legend-header { color: #ffffff !important; opacity: 1 !important; }\n"
+                ".mat-mdc-tooltip, .mat-tooltip, .tb-tooltip, .tb-time-series-chart-tooltip, .tb-chart-tooltip, .echarts-tooltip, .tooltip, div[class*='tooltip'], div[class*='tooltip'] *, .mat-mdc-tooltip .mdc-tooltip__surface, .tb-time-series-chart-tooltip * { color: #ffffff !important; }\n"
+                ".mat-mdc-tooltip .mdc-tooltip__surface, .tb-time-series-chart-tooltip, .echarts-tooltip { background-color: rgba(18, 27, 45, 0.95) !important; border: 1px solid rgba(255, 255, 255, 0.15) !important; }"
+            )
         }
     }
 
