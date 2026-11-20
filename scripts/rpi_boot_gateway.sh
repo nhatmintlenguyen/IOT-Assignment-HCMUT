@@ -30,21 +30,24 @@ if [ ! -d "gateway/.venv" ]; then
 fi
 
 # 4. Resolve ThingsBoard server target
-# Default to host PC on LAN or local Docker, overridable by .env or env var
+# Defaults to "auto" (LAN UDP Beacon auto-discovery), with fallback to last known LAN IP.
+# Can be overridden manually in .env via THINGSBOARD_HOST=1.2.3.4
 if [ -f "$REPO_DIR/.env" ]; then
     set -a
     source "$REPO_DIR/.env"
     set +a
 fi
 
-TB_HOST="${THINGSBOARD_HOST:-10.128.36.158}"
+TB_HOST="${THINGSBOARD_HOST:-auto}"
+TB_FALLBACK="${THINGSBOARD_FALLBACK_HOST:-10.128.36.158}"
 TB_PORT="${THINGSBOARD_PORT:-1883}"
 TB_TOKEN="${THINGSBOARD_TOKEN:-6EzRR6gcTvnOcgVF53hP}"
 SERIAL_PORT="${SERIAL_PORT:-auto}"
 
-echo "[INFO] Starting Gateway daemon -> ThingsBoard at ${TB_HOST}:${TB_PORT} (Device Token: ${TB_TOKEN})..."
+echo "[INFO] Launching Gateway daemon (Host: ${TB_HOST}, Fallback: ${TB_FALLBACK}, Port: ${TB_PORT})..."
 exec gateway/.venv/bin/python gateway/gateway.py \
     --host "$TB_HOST" \
+    --fallback-host "$TB_FALLBACK" \
     --port "$TB_PORT" \
     --token "$TB_TOKEN" \
     --serial-port "$SERIAL_PORT"

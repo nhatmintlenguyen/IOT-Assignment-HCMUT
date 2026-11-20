@@ -12,6 +12,7 @@ import argparse
 import glob
 import json
 import os
+import socket
 import sys
 import time
 import threading
@@ -30,12 +31,65 @@ except ImportError:
     from gateway.anomaly_detector import VaultAnomalyDetector
 
 
+def discover_thingsboard_server(beacon_port=50051, timeout=5.0):
+    """
+    Listens on UDP beacon_port for ThingsBoard broadcast announcements.
+    Returns (server_ip, mqtt_port, device_token, gw_token) or (None, None, None, None).
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+    except AttributeError:
+        pass
+
+    try:
+        sock.bind(('0.0.0.0', beacon_port))
+    except Exception as e:
+        print(f"[DISCOVERY] Could not bind UDP socket on port {beacon_port}: {e}")
+        return None, None, None, None
+
+    sock.settimeout(0.5)
+    start_time = time.time()
+    discovered = (None, None, None, None)
+
+    try:
+        while (time.time() - start_time) < timeout:
+            try:
+                data, addr = sock.recvfrom(2048)
+                msg = json.loads(data.decode("utf-8"))
+                if msg.get("service") in ("SMART_SAFE_THINGSBOARD", "thingsboard", "THINGSBOARD"):
+                    sender_ip = addr[0]
+                    # If sender is loopback, prefer the announced LAN IP if present
+                    if sender_ip.startswith("127.") and msg.get("ip"):
+                        server_ip = msg.get("ip")
+                    else:
+                        server_ip = sender_ip
+                    mqtt_port = int(msg.get("mqtt_port", 1883))
+                    dev_token = msg.get("device_token")
+                    gw_token = msg.get("gateway_token")
+                    discovered = (server_ip, mqtt_port, dev_token, gw_token)
+                    break
+            except (socket.timeout, TimeoutError):
+                continue
+            except Exception:
+                continue
+    finally:
+        sock.close()
+
+    return discovered
+
+
 class SmartSafeGateway:
-    def __init__(self, tb_host, tb_port, tb_token, serial_port, baudrate, mock=False, gw_token=None):
+    def __init__(self, tb_host, tb_port, tb_token, serial_port, baudrate, mock=False, gw_token=None, beacon_port=50051, fallback_host="127.0.0.1"):
+        self.raw_tb_host = tb_host
         self.tb_host = tb_host
         self.tb_port = tb_port
         self.tb_token = tb_token
         self.gw_token = gw_token
+        self.beacon_port = beacon_port
+        self.fallback_host = fallback_host
+        self.auto_discovery = (not tb_host or tb_host.strip().lower() == "auto")
         self.serial_port_name = serial_port
         self.baudrate = baudrate
         self.mock_mode = mock
@@ -43,6 +97,7 @@ class SmartSafeGateway:
         self.serial_conn = None
         self.mqtt_client = None
         self.gw_client = None
+        self.mqtt_connected = False
         self._last_gw_ping = 0
         self.running = True
         self.last_breach_state = False
@@ -136,8 +191,36 @@ class SmartSafeGateway:
                 print(f"[ERROR] Serial write error: {e}")
 
     # --------------------------------------------------------------------------
-    # MQTT COMMUNICATION (Gateway <--> ThingsBoard)
+    # MQTT & DISCOVERY (Gateway <--> ThingsBoard)
     # --------------------------------------------------------------------------
+    def resolve_target_host(self):
+        """Resolves ThingsBoard host either via manual config or UDP beacon discovery."""
+        if not self.auto_discovery:
+            print(f"[HOST] Using manually configured ThingsBoard host: {self.tb_host}:{self.tb_port}")
+            return True
+
+        print(f"[DISCOVERY] Auto-detecting ThingsBoard on local network (UDP port {self.beacon_port})...")
+        ip, port, dev_token, gw_token = discover_thingsboard_server(self.beacon_port, timeout=5.0)
+
+        if ip:
+            print(f"\033[92m[DISCOVERY] >>> Discovered ThingsBoard at {ip}:{port} via UDP Beacon! <<<\033[0m")
+            self.tb_host = ip
+            if port:
+                self.tb_port = port
+            if dev_token and (not self.tb_token or self.tb_token == "6EzRR6gcTvnOcgVF53hP"):
+                self.tb_token = dev_token
+            if gw_token and not self.gw_token:
+                self.gw_token = gw_token
+            return True
+
+        print(f"[DISCOVERY] No ThingsBoard beacon heard within 5s.")
+        if self.fallback_host:
+            print(f"[DISCOVERY] Falling back to host: {self.fallback_host}:{self.tb_port}")
+            self.tb_host = self.fallback_host
+            return True
+
+        return False
+
     def connect_mqtt(self):
         """Initializes and connects MQTT client to ThingsBoard."""
         # Check Paho MQTT version compatibility
@@ -178,20 +261,24 @@ class SmartSafeGateway:
 
             return True
         except Exception as e:
-            print(f"[ERROR] Could not connect to ThingsBoard MQTT broker: {e}")
+            print(f"[ERROR] Could not connect to ThingsBoard MQTT broker ({self.tb_host}:{self.tb_port}): {e}")
+            self.mqtt_connected = False
             return False
 
     def _on_mqtt_connect(self, client, userdata, flags, rc, properties=None):
         rc_code = rc if isinstance(rc, int) else getattr(rc, "value", rc)
         if rc_code == 0:
+            self.mqtt_connected = True
             print("[MQTT] Connected to ThingsBoard successfully!")
             # Subscribe to remote RPC commands from Dashboard widgets
             client.subscribe("v1/devices/me/rpc/request/+")
             print("[MQTT] Subscribed to RPC requests: 'v1/devices/me/rpc/request/+'")
         else:
+            self.mqtt_connected = False
             print(f"[MQTT] Connection refused with code {rc_code}")
 
     def _on_mqtt_disconnect(self, client, userdata, disconnect_flags_or_rc, properties=None):
+        self.mqtt_connected = False
         print("[MQTT] Disconnected from ThingsBoard broker. Reconnecting...")
 
     def _on_mqtt_message(self, client, userdata, msg):
@@ -399,10 +486,30 @@ class SmartSafeGateway:
         print("=========================================================")
         print("    Smart Safe Guardian - IoT Gateway Daemon (T08/T15)   ")
         print("=========================================================")
+
+        # 1. Resolve ThingsBoard server (UDP Beacon discovery or manual IP)
+        self.resolve_target_host()
+
         print(f"Target ThingsBoard Host : {self.tb_host}:{self.tb_port}")
         print(f"Device Access Token     : {self.tb_token}")
 
-        self.connect_mqtt()
+        # 2. Connect to ThingsBoard MQTT Broker
+        connected = self.connect_mqtt()
+
+        # If auto-discovery is enabled and broker connection failed, retry discovery loop
+        if not connected and self.auto_discovery:
+            print("[INFO] Waiting for ThingsBoard server to become reachable on LAN...")
+            while self.running and not connected:
+                time.sleep(2.0)
+                ip, port, dev_token, gw_token = discover_thingsboard_server(self.beacon_port, timeout=3.0)
+                if ip:
+                    print(f"\033[92m[DISCOVERY] Discovered ThingsBoard at {ip}:{port}!\033[0m")
+                    self.tb_host = ip
+                    if port:
+                        self.tb_port = port
+                    if dev_token:
+                        self.tb_token = dev_token
+                    connected = self.connect_mqtt()
 
         if self.mock_mode:
             try:
@@ -447,14 +554,18 @@ class SmartSafeGateway:
 # ------------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description="Smart Safe Guardian - Local IoT Gateway Daemon")
-    parser.add_argument("--host", default=os.getenv("THINGSBOARD_HOST", "127.0.0.1"),
-                        help="ThingsBoard MQTT Broker host IP (default: 127.0.0.1)")
+    parser.add_argument("--host", default=os.getenv("THINGSBOARD_HOST", "auto"),
+                        help="ThingsBoard MQTT Broker host IP, or 'auto' for UDP LAN beacon discovery (default: auto)")
     parser.add_argument("--port", type=int, default=int(os.getenv("THINGSBOARD_PORT", "1883")),
                         help="ThingsBoard MQTT port (default: 1883)")
     parser.add_argument("--token", default=os.getenv("THINGSBOARD_TOKEN", "6EzRR6gcTvnOcgVF53hP"),
                         help="ThingsBoard Device Access Token (default: 6EzRR6gcTvnOcgVF53hP)")
     parser.add_argument("--gateway-token", default=os.getenv("GATEWAY_TOKEN", "GATEWAY_SECRET_TOKEN"),
                         help="ThingsBoard Gateway Access Token (default: GATEWAY_SECRET_TOKEN)")
+    parser.add_argument("--beacon-port", type=int, default=int(os.getenv("BEACON_PORT", "50051")),
+                        help="UDP Beacon port for automatic ThingsBoard discovery (default: 50051)")
+    parser.add_argument("--fallback-host", default=os.getenv("THINGSBOARD_FALLBACK_HOST", "127.0.0.1"),
+                        help="Fallback IP if UDP beacon discovery times out (default: 127.0.0.1)")
     parser.add_argument("--serial-port", default=os.getenv("SERIAL_PORT", "auto"),
                         help="Serial port for YoloUNO (default: auto)")
     parser.add_argument("--baudrate", type=int, default=int(os.getenv("SERIAL_BAUDRATE", "115200")),
@@ -469,6 +580,8 @@ def main():
         tb_port=args.port,
         tb_token=args.token,
         gw_token=args.gateway_token,
+        beacon_port=args.beacon_port,
+        fallback_host=args.fallback_host,
         serial_port=args.serial_port,
         baudrate=args.baudrate,
         mock=args.mock

@@ -18,7 +18,7 @@ BADGE_PORT ?= $(if $(PORT),$(PORT),$(DETECTED_BADGE_PORT))
 MONITOR_REQUESTED := $(if $(filter monitor,$(MAKECMDGOALS)),1,$(if $(MONITOR),1,0))
 MONITOR_TARGET    := $(if $(filter 1,$(MONITOR_REQUESTED)),-t monitor,)
 
-.PHONY: help env init init-all up down restart logs ps tunnel tunnel-down reset check-pio install-pio ports build-vault flash-vault flash-vault-monitor monitor-vault build-badge flash-badge flash-badge-monitor monitor-badge run-gateway setup-rpi-service setup-thingsboard monitor
+.PHONY: help env init init-all up down restart logs ps tunnel tunnel-down reset check-pio install-pio ports build-vault flash-vault flash-vault-monitor monitor-vault build-badge flash-badge flash-badge-monitor monitor-badge run-gateway setup-rpi-service setup-thingsboard monitor beacon beacon-bg beacon-stop
 
 help: ## List commands
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/ -/'
@@ -124,8 +124,36 @@ gateway/.venv/bin/python:
 	gateway/.venv/bin/pip install --upgrade pip
 	gateway/.venv/bin/pip install -r gateway/requirements.txt
 
-run-gateway: gateway/.venv/bin/python ## Start Python Gateway connected to ThingsBoard & YoloUNO (auto-creates venv if needed)
-	gateway/.venv/bin/python gateway/gateway.py --host localhost --port 1883 --token 6EzRR6gcTvnOcgVF53hP
+HOST ?= auto
+
+run-gateway: gateway/.venv/bin/python ## Start Python Gateway (auto-discovers ThingsBoard, or override with HOST=1.2.3.4)
+	gateway/.venv/bin/python gateway/gateway.py --host $(HOST) --port 1883 --token 6EzRR6gcTvnOcgVF53hP
+
+beacon: ## Run ThingsBoard UDP discovery beacon in foreground
+	python3 scripts/tb_beacon.py
+
+beacon-bg: ## Run ThingsBoard UDP discovery beacon in background
+	@if [ -f scripts/.tb_beacon.pid ] && kill -0 $$(cat scripts/.tb_beacon.pid) 2>/dev/null; then \
+		echo "[INFO] ThingsBoard beacon is already running (PID: $$(cat scripts/.tb_beacon.pid))."; \
+	else \
+		python3 scripts/tb_beacon.py --daemon --silent --pid-file scripts/.tb_beacon.pid; \
+		sleep 0.2; \
+		if [ -f scripts/.tb_beacon.pid ]; then \
+			echo "\033[92m[OK] ThingsBoard LAN discovery beacon started in background (PID: $$(cat scripts/.tb_beacon.pid))!\033[0m"; \
+		else \
+			echo "\033[93m[WARN] Beacon failed to start.\033[0m"; \
+		fi; \
+	fi
+
+beacon-stop: ## Stop background ThingsBoard UDP discovery beacon
+	@if [ -f scripts/.tb_beacon.pid ]; then \
+		kill $$(cat scripts/.tb_beacon.pid) 2>/dev/null || true; \
+		rm -f scripts/.tb_beacon.pid; \
+		echo "[OK] ThingsBoard beacon stopped."; \
+	else \
+		pkill -f "python3.*tb_beacon.py" 2>/dev/null || true; \
+		echo "[OK] No active beacon found."; \
+	fi
 
 setup-rpi-service: ## Install and enable systemd gateway and 5-min auto-update timer on Raspberry Pi
 	@echo "[INFO] Installing systemd gateway service and auto-update timer..."
@@ -145,11 +173,13 @@ env: ## Create .env from .env.example if missing
 init: env ## Initialize DB schema (first run ONLY), then start
 	$(COMPOSE) run --rm -e INSTALL_TB=true -e LOAD_DEMO=$(LOAD_DEMO) $(TB)
 	$(COMPOSE) up -d postgres $(TB)
+	@$(MAKE) beacon-bg
 
-up: env ## Start ThingsBoard
+up: env ## Start ThingsBoard & discovery beacon
 	$(COMPOSE) up -d postgres $(TB)
+	@$(MAKE) beacon-bg
 
-setup-thingsboard: up ## Start ThingsBoard Docker containers, wait for API readiness, and auto-provision everything in 1 click
+setup-thingsboard: up ## Start ThingsBoard Docker containers, wait for API readiness, auto-provision in 1 click, and start beacon
 	@echo "[INFO] Waiting for ThingsBoard container API to become ready (port 8080)..."
 	@until curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/auth/login | grep -qE "401|400|200"; do \
 		printf "."; \
@@ -158,8 +188,9 @@ setup-thingsboard: up ## Start ThingsBoard Docker containers, wait for API readi
 	@echo ""
 	@echo "\033[92m[INFO] ThingsBoard API is UP! Running automated provisioning...\033[0m"
 	gateway/.venv/bin/python scripts/setup_thingsboard.py
+	@$(MAKE) beacon-bg
 
-init-all: init ## First-time full setup: Initialize PostgreSQL schema, start ThingsBoard, and auto-provision everything in 1 click
+init-all: init ## First-time full setup: Initialize PostgreSQL schema, start ThingsBoard, auto-provision, and start beacon
 	@echo "[INFO] Waiting for ThingsBoard container API to become ready (port 8080)..."
 	@until curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/auth/login | grep -qE "401|400|200"; do \
 		printf "."; \
@@ -168,8 +199,9 @@ init-all: init ## First-time full setup: Initialize PostgreSQL schema, start Thi
 	@echo ""
 	@echo "\033[92m[INFO] ThingsBoard API is UP! Running automated provisioning...\033[0m"
 	gateway/.venv/bin/python scripts/setup_thingsboard.py
+	@$(MAKE) beacon-bg
 
-down: ## Stop everything (data is kept)
+down: beacon-stop ## Stop everything (data is kept) and stop beacon
 	$(COMPOSE) --profile tunnel down
 
 restart: ## Restart ThingsBoard
