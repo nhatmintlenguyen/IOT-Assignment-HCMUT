@@ -118,7 +118,13 @@ reboot-badge: ## Send software reboot command to Yolo:Bit over serial
 monitor: ## Auxiliary target to enable 'make flash-* monitor' chaining
 	@:
 
-run-gateway: ## Start Python Gateway connected to ThingsBoard & YoloUNO
+gateway/.venv/bin/python:
+	@echo "[INFO] Creating Python virtual environment in gateway/.venv..."
+	python3 -m venv gateway/.venv
+	gateway/.venv/bin/pip install --upgrade pip
+	gateway/.venv/bin/pip install -r gateway/requirements.txt
+
+run-gateway: gateway/.venv/bin/python ## Start Python Gateway connected to ThingsBoard & YoloUNO (auto-creates venv if needed)
 	gateway/.venv/bin/python gateway/gateway.py --host localhost --port 1883 --token 6EzRR6gcTvnOcgVF53hP
 
 setup-rpi-service: ## Install and enable systemd gateway and 5-min auto-update timer on Raspberry Pi
