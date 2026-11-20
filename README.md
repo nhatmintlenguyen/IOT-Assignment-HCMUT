@@ -343,3 +343,15 @@ gateway/.venv/bin/python gateway/gateway.py --host localhost --port 1883 --token
 gateway/.venv/bin/python gateway/gateway.py --serial-port /dev/ttyACM0 --host localhost --token 6EzRR6gcTvnOcgVF53hP
 ```
 
+### 8.4 Autonomous Raspberry Pi Zero 2W Deployment
+On the Raspberry Pi Zero 2W connected to the YoloUNO via USB:
+```bash
+# 1. Install and enable the systemd boot service (pulls git and runs gateway automatically):
+make setup-rpi-service
+
+# 2. Check live execution logs:
+sudo journalctl -u smart-safe-gateway.service -f
+```
+The script `scripts/rpi_boot_gateway.sh` automatically waits for network, pulls the latest code from `origin/main`, provisions the python environment, and launches the daemon targeting your ThingsBoard server.
+
+

@@ -1,0 +1,16 @@
+[Unit]
+Description=Smart Safe Guardian IoT Gateway Daemon (Raspberry Pi Zero 2W)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/IOT-Assignment-HCMUT
+ExecStart=%h/IOT-Assignment-HCMUT/scripts/rpi_boot_gateway.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

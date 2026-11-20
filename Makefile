@@ -96,6 +96,14 @@ monitor-badge: check-pio ## Open serial monitor for Yolo:Bit (115200 baud)
 run-gateway: ## Start Python Gateway connected to ThingsBoard & YoloUNO
 	gateway/.venv/bin/python gateway/gateway.py --host localhost --port 1883 --token 6EzRR6gcTvnOcgVF53hP
 
+setup-rpi-service: ## Install and enable systemd auto-update service on Raspberry Pi
+	@echo "[INFO] Installing systemd service on Raspberry Pi..."
+	sed "s|%h|$$HOME|g" scripts/smart-safe-gateway.service | sudo tee /etc/systemd/system/smart-safe-gateway.service >/dev/null
+	sudo systemctl daemon-reload
+	sudo systemctl enable --now smart-safe-gateway.service
+	@echo "\033[92m[SUCCESS] smart-safe-gateway.service installed and started!\033[0m"
+	@echo "Check status with: sudo systemctl status smart-safe-gateway.service"
+
 env: ## Create .env from .env.example if missing
 	@test -f .env || (cp .env.example .env && echo ".env created")
 
