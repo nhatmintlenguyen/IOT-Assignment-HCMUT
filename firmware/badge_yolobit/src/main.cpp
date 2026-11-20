@@ -4,6 +4,7 @@
 #include <esp_mac.h>
 #include <esp_wifi.h>
 #include <esp_arduino_version.h>
+#include <Preferences.h>
 #include <Adafruit_NeoPixel.h>
 
 // Official Yolo:Bit hardware pinout
@@ -15,10 +16,25 @@
 
 Adafruit_NeoPixel matrix(NUM_LEDS, PIN_RGB_LED, NEO_GRB + NEO_KHZ800);
 
-// Dynamic Auto-Pairing: Starts with Broadcast MAC so badge discovers YoloUNO automatically
+// NVS Persistent Storage for paired YoloUNO MAC
+Preferences badgePrefs;
 const uint8_t BROADCAST_MAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 uint8_t vaultMacAddress[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-bool vaultDiscovered = false;
+bool isVaultPaired = false;
+
+void load_paired_vault() {
+    badgePrefs.begin("badge_auth", false);
+    isVaultPaired = badgePrefs.getBool("is_paired", false);
+    if (isVaultPaired) {
+        badgePrefs.getBytes("vault_mac", vaultMacAddress, 6);
+        Serial.printf("[AUTH] Paired YoloUNO MAC loaded from NVS: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                      vaultMacAddress[0], vaultMacAddress[1], vaultMacAddress[2],
+                      vaultMacAddress[3], vaultMacAddress[4], vaultMacAddress[5]);
+    } else {
+        memcpy(vaultMacAddress, BROADCAST_MAC, 6);
+        Serial.println("[AUTH] No YoloUNO paired yet. Hold A+B for 1.5s in Pairing Mode.");
+    }
+}
 
 // Bidirectional message structures
 typedef struct struct_badge_request {
@@ -122,12 +138,15 @@ void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
         memcpy((void*)&lastResponse, data, sizeof(lastResponse));
         responseReceived = true;
 
-        if (!vaultDiscovered) {
+        // If pairing succeeded, persist new YoloUNO MAC to NVS
+        if (strcmp(lastResponse.status, "PAIR_OK") == 0) {
             memcpy(vaultMacAddress, srcMac, 6);
-            vaultDiscovered = true;
-            Serial.printf("[AUTO-PAIR] YoloUNO Vault discovered: %02X:%02X:%02X:%02X:%02X:%02X\n",
+            isVaultPaired = true;
+            badgePrefs.putBytes("vault_mac", vaultMacAddress, 6);
+            badgePrefs.putBool("is_paired", true);
+            Serial.printf("[PAIR SUCCESS] YoloUNO Vault paired and saved to NVS: %02X:%02X:%02X:%02X:%02X:%02X\n",
                           srcMac[0], srcMac[1], srcMac[2], srcMac[3], srcMac[4], srcMac[5]);
-            // Register dedicated peer
+
             if (!esp_now_is_peer_exist(srcMac)) {
                 esp_now_peer_info_t peer = {};
                 memcpy(peer.peer_addr, srcMac, 6);
@@ -178,6 +197,9 @@ void setup() {
     Serial.println("  Smart Safe Guardian - Yolo:Bit Badge");
     Serial.println("==========================================");
 
+    // Load paired YoloUNO MAC from persistent NVS flash
+    load_paired_vault();
+
     // Initialize Wi-Fi in Station mode on Channel 1
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
@@ -196,16 +218,23 @@ void setup() {
 
     esp_now_register_recv_cb(onDataRecv);
 
-    // Register Broadcast peer so badge can reach YoloUNO dynamically
-    esp_now_peer_info_t peerInfo = {};
-    memcpy(peerInfo.peer_addr, BROADCAST_MAC, 6);
-    peerInfo.channel = 1;
-    peerInfo.encrypt = false;
+    // 1. Register Broadcast peer (required for sending PAIR_REQ)
+    esp_now_peer_info_t bcastPeer = {};
+    memcpy(bcastPeer.peer_addr, BROADCAST_MAC, 6);
+    bcastPeer.channel = 1;
+    bcastPeer.encrypt = false;
+    esp_now_add_peer(&bcastPeer);
 
-    if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-        Serial.println("[ERROR] Failed to add Broadcast peer");
+    // 2. If already paired, register unicast peer for YoloUNO
+    if (isVaultPaired) {
+        esp_now_peer_info_t vaultPeer = {};
+        memcpy(vaultPeer.peer_addr, vaultMacAddress, 6);
+        vaultPeer.channel = 1;
+        vaultPeer.encrypt = false;
+        esp_now_add_peer(&vaultPeer);
+        Serial.println("[OK] Unicast peer for paired YoloUNO registered successfully.");
     } else {
-        Serial.println("[OK] Broadcast peer registered (Ready to auto-pair with YoloUNO).");
+        Serial.println("[INFO] Running in Unpaired mode. Ready to pair (Hold A+B 1.5s).");
     }
 }
 
@@ -218,7 +247,25 @@ void executeFeedback(const char* status) {
     const uint32_t COLOR_AMBER = matrix.Color(60, 30, 0);
     const uint32_t COLOR_WHITE = matrix.Color(60, 60, 60);
 
-    if (strcmp(status, "OK_UNLOCKED") == 0) {
+    if (strcmp(status, "PAIR_OK") == 0) {
+        // Pairing Successful: Green Checkmark -> Open Lock with happy double chime
+        drawIcon(ICON_CHECK, COLOR_GREEN);
+        beep(1600, 100);
+        delay(150);
+        beep(2400, 200);
+        delay(400);
+
+        drawIcon(ICON_LOCK_CLOSED, COLOR_BLUE);
+        beep(2800, 250);
+        delay(600);
+    }
+    else if (strcmp(status, "PAIR_DENIED") == 0) {
+        // Pairing Denied (Vault not in pairing mode)
+        drawIcon(ICON_CROSS, COLOR_RED);
+        beep(400, 300);
+        delay(600);
+    }
+    else if (strcmp(status, "OK_UNLOCKED") == 0) {
         // 1. Green Tick
         drawIcon(ICON_CHECK, COLOR_GREEN);
         beep(1500, 120);
@@ -327,12 +374,15 @@ void sendBadgeCommand(const char* cmd) {
     matrix.setPixelColor(12, matrix.Color(0, 40, 90));
     matrix.show();
 
+    // If pairing request, ALWAYS send to BROADCAST_MAC
+    const uint8_t *targetMac = (strcmp(cmd, "PAIR_REQ") == 0) ? BROADCAST_MAC : vaultMacAddress;
+
     Serial.printf("[ACTION] Sending '%s' (counter: %lu) to %02X:%02X:%02X:%02X:%02X:%02X...\n",
                   cmd, (unsigned long)reqMsg.counter,
-                  vaultMacAddress[0], vaultMacAddress[1], vaultMacAddress[2],
-                  vaultMacAddress[3], vaultMacAddress[4], vaultMacAddress[5]);
+                  targetMac[0], targetMac[1], targetMac[2],
+                  targetMac[3], targetMac[4], targetMac[5]);
 
-    esp_now_send(vaultMacAddress, (uint8_t *)&reqMsg, sizeof(reqMsg));
+    esp_now_send(targetMac, (uint8_t *)&reqMsg, sizeof(reqMsg));
 
     // Wait for response up to 1500ms (expanded timeout for reliability)
     const uint32_t startMs = millis();
@@ -351,9 +401,6 @@ void sendBadgeCommand(const char* cmd) {
         executeFeedback(lastResponse.status);
     } else {
         Serial.println("[TIMEOUT] No response received from YoloUNO.");
-        // Revert to broadcast so badge can discover YoloUNO on next attempt
-        memcpy(vaultMacAddress, BROADCAST_MAC, 6);
-        vaultDiscovered = false;
         executeFeedback("TIMEOUT");
     }
 }
@@ -365,13 +412,38 @@ void loop() {
     int readingA = digitalRead(PIN_BUTTON_A);
     int readingB = digitalRead(PIN_BUTTON_B);
 
-    // Combo A+B pressed simultaneously -> Simulate Fake / Rogue Unauthorized Badge
+    // Combo A+B pressed simultaneously
+    // Short Combo (< 1.5s) -> Fake / Rogue Unauthorized Badge
+    // Long Combo (>= 1.5s)  -> Send PAIR_REQ to YoloUNO
     if ((readingA == LOW && readingB == LOW) && (lastA == HIGH || lastB == HIGH)) {
-        sendBadgeCommand("FAKE_BADGE");
-        while (digitalRead(PIN_BUTTON_A) == LOW || digitalRead(PIN_BUTTON_B) == LOW) {
+        const uint32_t comboStartMs = millis();
+        bool isLongCombo = false;
+
+        // Visual animation: center yellow dot while holding
+        matrix.setPixelColor(12, matrix.Color(60, 40, 0));
+        matrix.show();
+
+        while (digitalRead(PIN_BUTTON_A) == LOW && digitalRead(PIN_BUTTON_B) == LOW) {
+            if (!isLongCombo && (millis() - comboStartMs >= 1500)) {
+                isLongCombo = true;
+                beep(2400, 150); // Feedback beep indicating pairing request armed
+                matrix.setPixelColor(12, matrix.Color(0, 80, 80)); // Cyan dot
+                matrix.show();
+            }
             delay(20);
         }
-        delay(200);
+
+        if (isLongCombo) {
+            Serial.println("[BADGE] Long Combo A+B (>= 1.5s) -> Initiating Secure PAIR_REQ...");
+            sendBadgeCommand("PAIR_REQ");
+        } else {
+            Serial.println("[BADGE] Short Combo A+B (< 1.5s) -> Simulating Rogue FAKE_BADGE...");
+            sendBadgeCommand("FAKE_BADGE");
+        }
+        delay(300);
+        lastA = HIGH;
+        lastB = HIGH;
+        return;
     }
     // Button A pressed (Short press = Unlock, Long press >= 1.0s = Acknowledge Breach)
     else if (readingA == LOW && lastA == HIGH && readingB == HIGH) {

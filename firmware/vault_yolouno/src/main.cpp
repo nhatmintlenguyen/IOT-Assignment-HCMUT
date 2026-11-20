@@ -4,6 +4,7 @@
 #include <esp_mac.h>
 #include <esp_wifi.h>
 #include <esp_arduino_version.h>
+#include <Preferences.h>
 #include <Adafruit_NeoPixel.h>
 #include "sensor_monitor.h"
 #include "sensor_snapshot.h"
@@ -14,6 +15,41 @@
 
 #define NEO_PIN 45
 #define LED_COUNT 1
+#define PIN_BOOT_BUTTON 0
+
+// NVS Persistent Storage for authorized Badge MAC
+Preferences authPrefs;
+uint8_t authorizedBadgeMac[6] = {0};
+bool hasAuthorizedBadge = false;
+volatile uint32_t pairingWindowUntilMs = 0;
+
+void load_paired_badge() {
+    authPrefs.begin("vault_auth", false);
+    hasAuthorizedBadge = authPrefs.getBool("has_badge", false);
+    if (hasAuthorizedBadge) {
+        authPrefs.getBytes("badge_mac", authorizedBadgeMac, 6);
+        Serial.printf("[AUTH] Authorized Badge MAC loaded from NVS: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                      authorizedBadgeMac[0], authorizedBadgeMac[1], authorizedBadgeMac[2],
+                      authorizedBadgeMac[3], authorizedBadgeMac[4], authorizedBadgeMac[5]);
+    } else {
+        Serial.println("[AUTH] No Badge paired yet. Press BOOT button or IR Key 'E' to pair.");
+    }
+}
+
+void start_pairing_mode() {
+    pairingWindowUntilMs = millis() + 15000; // 15 seconds pairing window
+    Serial.println("{\"type\":\"event\",\"source\":\"vault\",\"action\":\"pairing_mode_started\",\"window_sec\":15}");
+}
+
+bool is_pairing_mode_active() {
+    return (millis() < pairingWindowUntilMs);
+}
+
+uint32_t get_remaining_pairing_sec() {
+    const uint32_t now = millis();
+    if (now >= pairingWindowUntilMs) return 0;
+    return (pairingWindowUntilMs - now + 999) / 1000;
+}
 
 typedef struct struct_badge_request {
     char cmd[16];        // "UNLOCK", "LOCK", "MASTER_AUTH"
@@ -34,12 +70,70 @@ void onDataRecv(const uint8_t *srcMac, const uint8_t *data, int len) {
     if (len == sizeof(struct_badge_request)) {
         struct_badge_request req;
         memcpy(&req, data, sizeof(req));
-        Serial.printf("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"%s\",\"counter\":%lu}\n",
+        Serial.printf("[ESP-NOW RX] From %02X:%02X:%02X:%02X:%02X:%02X | Cmd: '%s' (counter: %lu)\n",
+                      srcMac[0], srcMac[1], srcMac[2], srcMac[3], srcMac[4], srcMac[5],
                       req.cmd, (unsigned long)req.counter);
 
         struct_vault_response resp;
         resp.counter = req.counter;
         strcpy(resp.status, "DENIED");
+
+        const uint32_t now = millis();
+        const bool inPairingWindow = (now < pairingWindowUntilMs);
+
+        // --- 1. PAIRING REQUEST ---
+        if (strcmp(req.cmd, "PAIR_REQ") == 0) {
+            if (inPairingWindow) {
+                memcpy(authorizedBadgeMac, srcMac, 6);
+                hasAuthorizedBadge = true;
+                authPrefs.putBytes("badge_mac", authorizedBadgeMac, 6);
+                authPrefs.putBool("has_badge", true);
+                pairingWindowUntilMs = 0; // Close pairing window immediately
+
+                strcpy(resp.status, "PAIR_OK");
+                lcd_show_notification("BADGE PAIRED!", "Authorized OK");
+                Serial.printf("{\"type\":\"event\",\"source\":\"pairing\",\"action\":\"badge_paired\",\"mac\":\"%02X:%02X:%02X:%02X:%02X:%02X\"}\n",
+                              srcMac[0], srcMac[1], srcMac[2], srcMac[3], srcMac[4], srcMac[5]);
+            } else {
+                strcpy(resp.status, "PAIR_DENIED");
+                Serial.println("{\"type\":\"event\",\"source\":\"pairing\",\"action\":\"pair_denied_window_closed\"}");
+            }
+
+            // Register peer and reply
+            if (!esp_now_is_peer_exist(srcMac)) {
+                esp_now_peer_info_t peer = {};
+                memcpy(peer.peer_addr, srcMac, 6);
+                peer.channel = 1;
+                peer.encrypt = false;
+                esp_now_add_peer(&peer);
+            }
+            esp_now_send(srcMac, (uint8_t *)&resp, sizeof(resp));
+            return;
+        }
+
+        // --- 2. SECURITY WHITELIST CHECK ---
+        // If a badge has been paired and incoming MAC doesn't match -> Rogue Badge!
+        if (hasAuthorizedBadge && memcmp(srcMac, authorizedBadgeMac, 6) != 0) {
+            Serial.printf("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"%s\",\"result\":\"denied_unauthorized\",\"alert\":\"ROGUE_BADGE_DETECTED\",\"rogue_mac\":\"%02X:%02X:%02X:%02X:%02X:%02X\"}\n",
+                          req.cmd, srcMac[0], srcMac[1], srcMac[2], srcMac[3], srcMac[4], srcMac[5]);
+            record_failed_attempt("badge_espnow");
+            strcpy(resp.status, "DENIED_UNAUTHORIZED");
+            lcd_show_notification("ROGUE BADGE", "Access Denied");
+
+            if (!esp_now_is_peer_exist(srcMac)) {
+                esp_now_peer_info_t peer = {};
+                memcpy(peer.peer_addr, srcMac, 6);
+                peer.channel = 1;
+                peer.encrypt = false;
+                esp_now_add_peer(&peer);
+            }
+            esp_now_send(srcMac, (uint8_t *)&resp, sizeof(resp));
+            return;
+        }
+
+        // --- 3. AUTHORIZED COMMAND PROCESSING ---
+        Serial.printf("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"%s\",\"counter\":%lu}\n",
+                      req.cmd, (unsigned long)req.counter);
 
         const VaultStatus status = get_vault_status();
         const SensorSnapshot sensors = get_sensor_snapshot();
@@ -64,7 +158,6 @@ void onDataRecv(const uint8_t *srcMac, const uint8_t *data, int len) {
             }
         } else if (strcmp(req.cmd, "LOCK") == 0) {
             if (status.breachActive) {
-                // Pressing LOCK during breach silences the alarm while keeping vault locked
                 acknowledge_breach();
                 strcpy(resp.status, "OK_ACKED");
                 lcd_show_notification("BADGE", "Breach Acked");
@@ -76,7 +169,6 @@ void onDataRecv(const uint8_t *srcMac, const uint8_t *data, int len) {
                 lcd_show_notification("BADGE", "Vault Locked");
             }
         } else if (strcmp(req.cmd, "FAKE_BADGE") == 0) {
-            // Simulated rogue / unauthorized badge (Combo A+B)
             Serial.println("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"FAKE_BADGE\",\"result\":\"denied_unauthorized\",\"alert\":\"ROGUE_BADGE_DETECTED\"}");
             record_failed_attempt("badge_espnow");
             strcpy(resp.status, "DENIED_UNAUTHORIZED");
@@ -118,6 +210,17 @@ void task_neopixel(void *pvParameters) {
   while(1) {
     const SensorSnapshot sensors = get_sensor_snapshot();
     const VaultStatus status = get_vault_status();
+
+    // 0. Pairing mode active: rapid cyan strobe (120ms cycle)
+    if (millis() < pairingWindowUntilMs) {
+      strip.setPixelColor(0, strip.Color(0, 180, 220));
+      strip.show();
+      vTaskDelay(pdMS_TO_TICKS(120));
+      strip.clear();
+      strip.show();
+      vTaskDelay(pdMS_TO_TICKS(120));
+      continue;
+    }
 
     // 0. Remote security lockdown: solid purple/magenta
     if (status.lockdownActive) {
@@ -234,6 +337,12 @@ void setup() {
     Serial.println("[ERROR] Failed to initialize ESP-NOW on YoloUNO.");
   }
 
+  // Initialize physical BOOT button (GPIO 0) for Pairing Trigger
+  pinMode(PIN_BOOT_BUTTON, INPUT_PULLUP);
+
+  // Load authorized badge MAC from persistent NVS flash
+  load_paired_badge();
+
   // FreeRTOS Tasks
   xTaskCreate(task_sensor_monitor, "Sensor Monitor", 4096, NULL, 2, NULL);
   xTaskCreate(task_neopixel, "NeoPixel Control", 2048, NULL, 2, NULL);
@@ -248,11 +357,23 @@ void loop() {
   // 2. Decode infrared remote commands
   ir_reader_tick();
 
-  // 3. Listen for serial USB commands (Gateway or manual CLI testing)
+  // 3. Physical BOOT Button on YoloUNO -> Trigger Secure Pairing Mode
+  static int lastBootState = HIGH;
+  const int bootReading = digitalRead(PIN_BOOT_BUTTON);
+  if (bootReading == LOW && lastBootState == HIGH) {
+    Serial.println("[BUTTON] BOOT button pressed on YoloUNO -> Entering Pairing Mode!");
+    start_pairing_mode();
+  }
+  lastBootState = bootReading;
+
+  // 4. Listen for serial USB commands (Gateway or manual CLI testing)
   if (Serial.available()) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
-    if (cmd == "unlock" || cmd.indexOf("unlock") >= 0) {
+    if (cmd == "pair" || cmd == "pairing") {
+      Serial.println("[CMD] 'pair' command received via USB -> Entering Pairing Mode!");
+      start_pairing_mode();
+    } else if (cmd == "unlock" || cmd.indexOf("unlock") >= 0) {
       Serial.println("[CMD] 'unlock' command received via USB");
       request_unlock();
       lcd_show_notification("WEB / CLOUD", "Access Granted");

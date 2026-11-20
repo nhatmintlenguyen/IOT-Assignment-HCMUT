@@ -36,3 +36,7 @@ void reset_failed_attempts();
 
 // Returns true once when a sustained light increase is detected while locked.
 bool observe_light_level(int lightAdc);
+
+// Secure Pairing state
+bool is_pairing_mode_active();
+uint32_t get_remaining_pairing_sec();

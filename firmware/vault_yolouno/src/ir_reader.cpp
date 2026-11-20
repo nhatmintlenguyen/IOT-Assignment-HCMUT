@@ -4,6 +4,8 @@
 #include "sensor_snapshot.h"
 #include "lcd_display.h"
 
+extern void start_pairing_mode();
+
 // Grove socket D6-D5 maps: D5 = GPIO 8, D6 = GPIO 9.
 // Grove 1-signal modules use Pin 1 (Yellow) = D5 = GPIO 8.
 #define IR_RECEIVE_PIN 8
@@ -75,6 +77,14 @@ void ir_reader_tick() {
                 pinPresenceErrorUntilMs = now + 2000;
                 Serial.printf("{\"type\":\"event\",\"source\":\"ir_remote\",\"key\":\"%c\",\"result\":\"denied_no_presence\"}\n",
                               key ? key : '?');
+                IrReceiver.resume();
+                return;
+            }
+
+            // --- KEY E : TRIGGER SECURE BADGE PAIRING MODE ---
+            if (command == IR_KEY_E) {
+                extend_standby_if_active();
+                start_pairing_mode();
                 IrReceiver.resume();
                 return;
             }

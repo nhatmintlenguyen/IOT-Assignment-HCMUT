@@ -1,6 +1,7 @@
 #include "lcd_display.h"
 #include "LiquidCrystal_I2C.h"
 #include "ir_reader.h"
+#include "vault_state.h"
 
 namespace {
 // Address 33 (0x21) is retained from the existing firmware.
@@ -116,44 +117,30 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
 
     // --- ABSOLUTE PRIORITIES ---
 
-    // 0. Remote security lockdown from ThingsBoard / Supervisor
+    // 0. Active Secure Pairing Window (Prioritaire sur Welcome et toutes les pages)
+    if (is_pairing_mode_active()) {
+        char line1[17];
+        snprintf(line1, sizeof(line1), "Hold A+B | %2lus", (unsigned long)get_remaining_pairing_sec());
+        print_padded_line(0, "[PAIRING MODE]");
+        print_padded_line(1, line1);
+        return;
+    }
+
+    // 1. Remote security lockdown from ThingsBoard / Supervisor
     if (status.lockdownActive) {
         print_padded_line(0, "VAULT LOCKDOWN");
         print_padded_line(1, "Access Disabled");
         return;
     }
 
-    // 1. Security breach alert
-    if (status.breachActive) {
-        print_padded_line(0, "SECURITY BREACH");
-        print_padded_line(1, "Waiting for ACK");
-        return;
-    }
-
-    // 2. Active vault unlocked state (live countdown + manual lock reminder)
-    if (status.lockState == LockState::Unlocked) {
-        char line1[17];
-        snprintf(line1, sizeof(line1), "F: Lock | %2lus", (unsigned long)get_remaining_unlock_time_sec());
-        print_padded_line(0, "DOOR UNLOCKED");
-        print_padded_line(1, line1);
-        return;
-    }
-
-    // 3. Presence error (remote unlock attempt without physical approach)
-    if (ir_reader_is_presence_error()) {
-        print_padded_line(0, "ACCESS DENIED");
-        print_padded_line(1, "Approach first");
-        return;
-    }
-
-    // 4. PIN entry error
+    // 2. Active PIN entry error feedback
     if (ir_reader_is_pin_error()) {
         print_padded_line(0, "PIN INCORRECT");
         print_padded_line(1, "Try again");
         return;
     }
 
-    // 5. PIN successfully changed confirmation
+    // 3. PIN successfully changed confirmation
     if (ir_reader_is_pin_success()) {
         print_padded_line(0, "PIN CHANGED");
         print_padded_line(1, "Success!");
@@ -163,14 +150,12 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
     const uint8_t pinState = ir_reader_get_pin_state();
     const uint8_t pinCount = ir_reader_get_pin_count();
 
-    // 6. Change PIN Prompt: "CHANGE PIN? / C:Yes   A:Cancel"
+    // 4. Change PIN Prompts (prioritaire si en cours)
     if (pinState == 1 && status.lockState == LockState::Locked) {
         print_padded_line(0, "CHANGE PIN?");
         print_padded_line(1, "C:Yes   A:Cancel");
         return;
     }
-
-    // 7. Enter Old PIN
     if (pinState == 2 && status.lockState == LockState::Locked) {
         print_padded_line(0, "ENTER OLD PIN");
         char pinDisplay[17] = "";
@@ -181,8 +166,6 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
         print_padded_line(1, pinDisplay);
         return;
     }
-
-    // 8. Enter New PIN
     if (pinState == 3 && status.lockState == LockState::Locked) {
         print_padded_line(0, "ENTER NEW PIN");
         char pinDisplay[17] = "";
@@ -194,7 +177,7 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
         return;
     }
 
-    // 9. Standard masked PIN entry in progress
+    // 5. Standard masked PIN entry in progress (PRIORITAIRE sur l'alarme breach!)
     if (pinCount > 0 && status.lockState == LockState::Locked) {
         print_padded_line(0, "ENTER PIN (C=OK)");
         char pinDisplay[17] = "";
@@ -203,6 +186,29 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
             else strcat(pinDisplay, "_ ");
         }
         print_padded_line(1, pinDisplay);
+        return;
+    }
+
+    // 6. Security breach alert (affiché si aucune saisie PIN en cours)
+    if (status.breachActive) {
+        print_padded_line(0, "SECURITY BREACH");
+        print_padded_line(1, "Waiting for ACK");
+        return;
+    }
+
+    // 7. Active vault unlocked state (live countdown + manual lock reminder)
+    if (status.lockState == LockState::Unlocked) {
+        char line1[17];
+        snprintf(line1, sizeof(line1), "F: Lock | %2lus", (unsigned long)get_remaining_unlock_time_sec());
+        print_padded_line(0, "DOOR UNLOCKED");
+        print_padded_line(1, line1);
+        return;
+    }
+
+    // 8. Presence error (remote unlock attempt without physical approach)
+    if (ir_reader_is_presence_error()) {
+        print_padded_line(0, "ACCESS DENIED");
+        print_padded_line(1, "Approach first");
         return;
     }
 
