@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_now.h>
+#include <esp_mac.h>
+#include <esp_wifi.h>
 #include <esp_arduino_version.h>
 #include <Adafruit_NeoPixel.h>
 
@@ -13,8 +15,10 @@
 
 Adafruit_NeoPixel matrix(NUM_LEDS, PIN_RGB_LED, NEO_GRB + NEO_KHZ800);
 
-// Target YoloUNO MAC address
-uint8_t vaultMacAddress[] = {0xA4, 0xCB, 0x8F, 0xF1, 0xF6, 0x60};
+// Dynamic Auto-Pairing: Starts with Broadcast MAC so badge discovers YoloUNO automatically
+const uint8_t BROADCAST_MAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+uint8_t vaultMacAddress[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+bool vaultDiscovered = false;
 
 // Bidirectional message structures
 typedef struct struct_badge_request {
@@ -109,12 +113,29 @@ void beep(int freq, int durationMs) {
 
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
 void onDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len) {
+    const uint8_t *srcMac = recv_info->src_addr;
 #else
 void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
+    const uint8_t *srcMac = mac;
 #endif
     if (len == sizeof(struct_vault_response)) {
         memcpy((void*)&lastResponse, data, sizeof(lastResponse));
         responseReceived = true;
+
+        if (!vaultDiscovered) {
+            memcpy(vaultMacAddress, srcMac, 6);
+            vaultDiscovered = true;
+            Serial.printf("[AUTO-PAIR] YoloUNO Vault discovered: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                          srcMac[0], srcMac[1], srcMac[2], srcMac[3], srcMac[4], srcMac[5]);
+            // Register dedicated peer
+            if (!esp_now_is_peer_exist(srcMac)) {
+                esp_now_peer_info_t peer = {};
+                memcpy(peer.peer_addr, srcMac, 6);
+                peer.channel = 1;
+                peer.encrypt = false;
+                esp_now_add_peer(&peer);
+            }
+        }
     }
 }
 
@@ -157,9 +178,16 @@ void setup() {
     Serial.println("  Smart Safe Guardian - Yolo:Bit Badge");
     Serial.println("==========================================");
 
+    // Initialize Wi-Fi in Station mode on Channel 1
     WiFi.mode(WIFI_STA);
-    Serial.print("[INFO] Yolo:Bit MAC: ");
-    Serial.println(WiFi.macAddress());
+    WiFi.disconnect();
+    esp_wifi_start();
+    esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
+
+    uint8_t myMac[6];
+    esp_read_mac(myMac, ESP_MAC_WIFI_STA);
+    Serial.printf("[INFO] Yolo:Bit MAC: %02X:%02X:%02X:%02X:%02X:%02X (Channel 1)\n",
+                  myMac[0], myMac[1], myMac[2], myMac[3], myMac[4], myMac[5]);
 
     if (esp_now_init() != ESP_OK) {
         Serial.println("[ERROR] Failed to initialize ESP-NOW");
@@ -168,16 +196,16 @@ void setup() {
 
     esp_now_register_recv_cb(onDataRecv);
 
-    // Register target peer (YoloUNO)
+    // Register Broadcast peer so badge can reach YoloUNO dynamically
     esp_now_peer_info_t peerInfo = {};
-    memcpy(peerInfo.peer_addr, vaultMacAddress, 6);
-    peerInfo.channel = 0;
+    memcpy(peerInfo.peer_addr, BROADCAST_MAC, 6);
+    peerInfo.channel = 1;
     peerInfo.encrypt = false;
 
     if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-        Serial.println("[ERROR] Failed to add YoloUNO peer");
+        Serial.println("[ERROR] Failed to add Broadcast peer");
     } else {
-        Serial.println("[OK] YoloUNO peer registered successfully.");
+        Serial.println("[OK] Broadcast peer registered (Ready to auto-pair with YoloUNO).");
     }
 }
 
@@ -299,7 +327,11 @@ void sendBadgeCommand(const char* cmd) {
     matrix.setPixelColor(12, matrix.Color(0, 40, 90));
     matrix.show();
 
-    Serial.printf("[ACTION] Sending '%s' (counter: %lu)...\n", cmd, (unsigned long)reqMsg.counter);
+    Serial.printf("[ACTION] Sending '%s' (counter: %lu) to %02X:%02X:%02X:%02X:%02X:%02X...\n",
+                  cmd, (unsigned long)reqMsg.counter,
+                  vaultMacAddress[0], vaultMacAddress[1], vaultMacAddress[2],
+                  vaultMacAddress[3], vaultMacAddress[4], vaultMacAddress[5]);
+
     esp_now_send(vaultMacAddress, (uint8_t *)&reqMsg, sizeof(reqMsg));
 
     // Wait for response up to 1500ms (expanded timeout for reliability)
@@ -319,6 +351,9 @@ void sendBadgeCommand(const char* cmd) {
         executeFeedback(lastResponse.status);
     } else {
         Serial.println("[TIMEOUT] No response received from YoloUNO.");
+        // Revert to broadcast so badge can discover YoloUNO on next attempt
+        memcpy(vaultMacAddress, BROADCAST_MAC, 6);
+        vaultDiscovered = false;
         executeFeedback("TIMEOUT");
     }
 }
@@ -393,5 +428,17 @@ void loop() {
 
     lastA = digitalRead(PIN_BUTTON_A);
     lastB = digitalRead(PIN_BUTTON_B);
+
+    // Listen for USB Serial commands (e.g. reboot)
+    if (Serial.available()) {
+        String cmd = Serial.readStringUntil('\n');
+        cmd.trim();
+        if (cmd == "reboot" || cmd == "restart") {
+            Serial.println("[CMD] Rebooting Yolo:Bit Badge...");
+            delay(200);
+            esp_restart();
+        }
+    }
+
     delay(50);
 }

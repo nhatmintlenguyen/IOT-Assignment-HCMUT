@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_now.h>
+#include <esp_mac.h>
+#include <esp_wifi.h>
 #include <esp_arduino_version.h>
 #include <Adafruit_NeoPixel.h>
 #include "sensor_monitor.h"
@@ -93,13 +95,17 @@ void onDataRecv(const uint8_t *srcMac, const uint8_t *data, int len) {
         if (!esp_now_is_peer_exist(srcMac)) {
             esp_now_peer_info_t peer = {};
             memcpy(peer.peer_addr, srcMac, 6);
-            peer.channel = 0;
+            peer.channel = 1;
             peer.encrypt = false;
-            esp_now_add_peer(&peer);
+            if (esp_now_add_peer(&peer) == ESP_OK) {
+                Serial.printf("[ESP-NOW] Peer registered: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                              srcMac[0], srcMac[1], srcMac[2], srcMac[3], srcMac[4], srcMac[5]);
+            }
         }
 
         // Send response back to the badge
-        esp_now_send(srcMac, (uint8_t *)&resp, sizeof(resp));
+        esp_err_t sendResult = esp_now_send(srcMac, (uint8_t *)&resp, sizeof(resp));
+        Serial.printf("[ESP-NOW TX] Reply '%s' sent to Badge (res: %d)\n", resp.status, sendResult);
     }
 }
 
@@ -210,14 +216,20 @@ void setup() {
   // Initialize IR remote receiver (Grove D6-D5, pin D5 = GPIO 8)
   ir_reader_init();
 
-  // Initialize ESP-NOW
+  // Initialize ESP-NOW on Wi-Fi STA (Channel 1)
   WiFi.mode(WIFI_STA);
-  Serial.print("[INFO] YoloUNO MAC: ");
-  Serial.println(WiFi.macAddress());
+  WiFi.disconnect();
+  esp_wifi_start();
+  esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
+
+  uint8_t mac[6];
+  esp_read_mac(mac, ESP_MAC_WIFI_STA);
+  Serial.printf("[INFO] YoloUNO MAC: %02X:%02X:%02X:%02X:%02X:%02X (Channel 1)\n",
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
   if (esp_now_init() == ESP_OK) {
     esp_now_register_recv_cb(onDataRecv);
-    Serial.println("[OK] ESP-NOW Receiver initialized.");
+    Serial.println("[OK] ESP-NOW Receiver initialized successfully.");
   } else {
     Serial.println("[ERROR] Failed to initialize ESP-NOW on YoloUNO.");
   }
@@ -260,6 +272,10 @@ void loop() {
       Serial.println("[CMD] Disabling security lockdown via USB");
       set_lockdown(false);
       lcd_show_notification("WEB / CLOUD", "Lockdown OFF");
+    } else if (cmd == "reboot" || cmd == "restart") {
+      Serial.println("[CMD] Rebooting YoloUNO Vault Controller...");
+      delay(200);
+      esp_restart();
     }
   }
 

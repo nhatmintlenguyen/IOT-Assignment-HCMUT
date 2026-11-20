@@ -18,7 +18,7 @@ BADGE_PORT ?= $(if $(PORT),$(PORT),$(DETECTED_BADGE_PORT))
 MONITOR_REQUESTED := $(if $(filter monitor,$(MAKECMDGOALS)),1,$(if $(MONITOR),1,0))
 MONITOR_TARGET    := $(if $(filter 1,$(MONITOR_REQUESTED)),-t monitor,)
 
-.PHONY: help env init up down restart logs ps tunnel tunnel-down reset check-pio install-pio ports build-vault flash-vault flash-vault-monitor monitor-vault build-badge flash-badge flash-badge-monitor monitor-badge run-gateway setup-rpi-service monitor
+.PHONY: help env init init-all up down restart logs ps tunnel tunnel-down reset check-pio install-pio ports build-vault flash-vault flash-vault-monitor monitor-vault build-badge flash-badge flash-badge-monitor monitor-badge run-gateway setup-rpi-service setup-thingsboard monitor
 
 help: ## List commands
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/ -/'
@@ -103,6 +103,18 @@ monitor-badge: check-pio ## Open serial monitor for Yolo:Bit (115200 baud)
 	fi
 	$(PIO) device monitor -d firmware/badge_yolobit -p $(BADGE_PORT) -b 115200
 
+reboot-vault: ## Send software reboot command to YoloUNO over serial
+	@if [ -z "$(VAULT_PORT)" ]; then \
+		echo "\033[91m[ERROR] No YoloUNO port detected.\033[0m"; exit 1; \
+	fi
+	@gateway/.venv/bin/python -c "import serial, time; s = serial.Serial('$(VAULT_PORT)', 115200, timeout=1); time.sleep(0.1); s.write(b'reboot\n'); s.close(); print('[OK] YoloUNO reboot command sent!')"
+
+reboot-badge: ## Send software reboot command to Yolo:Bit over serial
+	@if [ -z "$(BADGE_PORT)" ]; then \
+		echo "\033[91m[ERROR] No Yolo:Bit port detected.\033[0m"; exit 1; \
+	fi
+	@gateway/.venv/bin/python -c "import serial, time; s = serial.Serial('$(BADGE_PORT)', 115200, timeout=1); time.sleep(0.1); s.write(b'reboot\n'); s.close(); print('[OK] Yolo:Bit reboot command sent!')"
+
 monitor: ## Auxiliary target to enable 'make flash-* monitor' chaining
 	@:
 
@@ -130,6 +142,26 @@ init: env ## Initialize DB schema (first run ONLY), then start
 
 up: env ## Start ThingsBoard
 	$(COMPOSE) up -d postgres $(TB)
+
+setup-thingsboard: up ## Start ThingsBoard Docker containers, wait for API readiness, and auto-provision everything in 1 click
+	@echo "[INFO] Waiting for ThingsBoard container API to become ready (port 8080)..."
+	@until curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/auth/login | grep -qE "401|400|200"; do \
+		printf "."; \
+		sleep 3; \
+	done
+	@echo ""
+	@echo "\033[92m[INFO] ThingsBoard API is UP! Running automated provisioning...\033[0m"
+	gateway/.venv/bin/python scripts/setup_thingsboard.py
+
+init-all: init ## First-time full setup: Initialize PostgreSQL schema, start ThingsBoard, and auto-provision everything in 1 click
+	@echo "[INFO] Waiting for ThingsBoard container API to become ready (port 8080)..."
+	@until curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/auth/login | grep -qE "401|400|200"; do \
+		printf "."; \
+		sleep 3; \
+	done
+	@echo ""
+	@echo "\033[92m[INFO] ThingsBoard API is UP! Running automated provisioning...\033[0m"
+	gateway/.venv/bin/python scripts/setup_thingsboard.py
 
 down: ## Stop everything (data is kept)
 	$(COMPOSE) --profile tunnel down

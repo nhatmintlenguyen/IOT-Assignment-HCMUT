@@ -128,10 +128,10 @@ For detailed specifications, electrical ratings, voltage compatibility, and anti
         | - Servo rotates to 0° |       | - NeoPixel Flashes Red|
         | - NeoPixel turns Green|       | - LCD: "Invalid Code" |
         | - LCD: "Unlocked"     |       | - Strike count +1     |
-        | - Timer: 10s wait     |       +-----------------------+
+        | - Timer: 30s wait     |       +-----------------------+
         +-----------+-----------+
                     |
-              10s Timeout
+              30s Timeout
                     |
                     v
           (Return to IDLE / Lock)
