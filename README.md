@@ -10,9 +10,30 @@
 ### 1.2 Core Objectives
 * **Contactless & Backup Access**: Authorized personnel request entry via a wearable wireless smart badge (**ESP-NOW** on Yolo:Bit), with an infrared remote keypad as a secondary fallback mechanism.
 * **Environmental & Tamper Defense**: Continuous internal climate monitoring (**DHT20**) coupled with an internal optical sensor (**LDR**) that detects physical door breaches when the safe is locked.
-* **Emergency On-Device Web Server (`T07`)**: An integrated lightweight HTTP server running on the YoloUNO microcontroller providing a direct local dashboard and manual override portal without external network dependencies.
 * **Edge Anomaly Detection (`T09`)**: A lightweight Machine Learning model (**`scikit-learn` Isolation Forest**) executing on the local Gateway to detect abnormal access hours and anomalous sensor vectors.
-* **High-Availability Dual-Redundancy (`N07`)**: Concurrent telemetry streaming and RPC dispatch via **CoreIOT** (primary cloud) and a **self-deployed local ThingsBoard CE container** via Docker to guarantee continuous supervision during Internet disruptions.
+* **High-Availability Dual-Redundancy (`N07`)**: Concurrent telemetry streaming and RPC dispatch via a **self-deployed local ThingsBoard CE container** via Docker to guarantee continuous supervision during Internet disruptions.
+
+### 1.3 Technology Element Self-Assessment (Course Rubric Mapping)
+
+The table below maps the official CO3037 course evaluation rubric elements (**T01–T15** and **N01–N07**) to the concrete implementations within the **Smart Safe Guardian** project.
+
+| Technology Code (TE / N) | TE Description (Official HCMUT Rubric) | Implementation & Response in Smart Safe Guardian |
+| :--- | :--- | :--- |
+| **T06** (1.5 pts) | **Wireless communication using ESP-NOW** | Peer-to-peer 2.4 GHz bidirectional communication between the **Yolo:Bit wearable badge (ESP32)** and the **YoloUNO vault controller (ESP32-S3)**. Implements non-blocking unicast transmissions, NVS-paired MAC address filtering, and multi-state visual feedback (5x5 LED matrix) & acoustic feedback (buzzer) for lock, unlock, rogue badge simulation, and breach acknowledgement. |
+| **T08** (1.0 pt) | **IoT Gateway implemented on a PC (or Raspberry Pi)** | Python daemon (`gateway/gateway.py`) executing on PC / Raspberry Pi Zero 2W. Bridges bidirectional USB CDC Serial (115200 baud, newline-delimited JSON) to ThingsBoard MQTT (`v1/devices/me/telemetry` and `v1/devices/me/rpc`). Features automatic port resolution (distinguishing YoloUNO from Badge CH340), anti-bounce deduplication, and zero-configuration UDP discovery. |
+| **T09** (1.0 pt) | **AI function running on the local IoT Gateway to analyze data** | Real-time Machine Learning model (**Isolation Forest** via `scikit-learn`) running on sliding temporal windows. Evaluates temperature variations, internal light (LDR), proximity (ultrasonic), door state, failed access attempts, and time-of-day to generate a continuous, normalized `anomaly_score` ($[0.0, 1.0]$) streamed to the cloud dashboard. |
+| **T10** (1.0 pt) | **Monitoring and control interface on the local IoT Gateway** | Standalone local operator interface hosted on the Gateway network (local containerized ThingsBoard instance accessible at `http://<GATEWAY_IP>:8080` and real-time structured CLI logging). Allows offline operators to monitor telemetry gauges, track audit history, and dispatch remote RPC commands without WAN access. |
+| **T11** (1.0 pt) | **Application templates, dashboards, and remote monitoring/control** | Comprehensive supervisory dashboard provisioned via script (`scripts/setup_thingsboard.py`). Features real-time state cards, live proximity radar, multi-axis telemetry charts, historical audit tables, and low-latency two-way RPC control buttons (Unlock, Lock, Arm/Clear Lockdown, Ack Breach). |
+| **T12** (1.0 pt) | **Using RuleChain to develop smart features** | ThingsBoard RuleChain engine filtering incoming telemetry and events: evaluates physical breach conditions (LDR tripped while door is `LOCKED`), handles failed access lockout rules, and triggers automated alerting pipelines. |
+| **T13** (0.5 pt) | **Sending alert notifications when data exceeds a threshold** | Automated instant push notifications dispatched via **Telegram Bot** whenever an internal tamper breach occurs (LDR $> 500$ in locked state) or a rogue unauthorized badge attempts access. |
+| **T15** (2.0 pts) | **IoT Gateway synchronized with local IoT Gateway** | Bi-directional synchronization between the physical microcontroller nodes and the ThingsBoard platform: periodic gateway health heartbeats, link quality tracking, automatic state alignment, and transparent routing of cloud RPCs down to microcontrollers. |
+| **N06** (1.0 pt - Bonus) | **Custom-designed dashboard able to detect and record events** | Custom-engineered `Access & Security Audit Log` widget with strict binary door states (`LOCKED` / `UNLOCKED`), semantic event classification (`ROGUE BADGE REJECTED`, `PIN Access Denied`, `EMERGENCY LOCKDOWN ARMED`), sliding-window deduplication, and paginated audit traceability. |
+| **N07** (1.0 pt - Bonus) | **Self-deployed ThingsBoard on a local machine** | Fully containerized ThingsBoard Community Edition (v3.8) running on a local Docker stack with PostgreSQL persistence, 1-click automated provisioning (`scripts/setup_thingsboard.py`), and background UDP broadcast beacon for zero-config local discovery. |
+
+> **Score Summary**:
+> * **Technology Elements (T)**: $\sum = 9.0 \text{ pts} \rightarrow$ **Capped at 8.0 / 8.0 pts max**.
+> * **Advanced Features (N)**: $\sum = 2.0 \text{ pts} \rightarrow$ **Capped at 1.0 / 1.0 pt max**.
+> * **Target Technical Total**: **9.0 / 9.0 pts** (before the 2.0 pts report).
 
 ---
 
@@ -332,15 +353,25 @@ make monitor-badge
 ### 8.3 Running the Local Gateway (PC / Raspberry Pi Zero 2W)
 Once the YoloUNO is connected via USB, launch the Python Gateway bridge:
 ```bash
-# Using Makefile:
+# Standard Human-Readable Mode (auto-discovers ThingsBoard):
 make run-gateway
 
-# Or using the dedicated venv directly:
-gateway/.venv/bin/python gateway/gateway.py --host localhost --port 1883 --token 6EzRR6gcTvnOcgVF53hP
+# Verbose / Debug Mode (streams raw serial and MQTT payloads):
+make run-gateway ARGS="--debug"
+
+# Target a manual IP and custom port:
+make run-gateway HOST=192.168.1.50
+
+# Direct execution via virtual environment:
+gateway/.venv/bin/python gateway/gateway.py --host auto --debug
 ```
-*Auto-detection:* The gateway automatically discovers `/dev/ttyACM*` or `/dev/ttyUSB*` ports. To target a specific port:
+*Console Output Formats:*
+* **Standard Mode**: Displays clean, timestamped human-readable events (`[HH:MM:SS] 🔓 [ACCESS] Door Unlocked via Badge`, `[HH:MM:SS] 📊 [TELEMETRY] ...`, and real-time AI score shifts).
+* **Debug Mode (`--debug` / `-v`)**: Shows full raw incoming USB CDC serial packets (`[DEBUG SERIAL RX]`) and outgoing MQTT telemetry/RPC payloads (`[DEBUG MQTT TX]`).
+
+*Port Auto-detection:* The gateway automatically discovers `/dev/ttyACM*` or `/dev/ttyUSB*` ports. To target a specific port:
 ```bash
-gateway/.venv/bin/python gateway/gateway.py --serial-port /dev/ttyACM0 --host localhost --token 6EzRR6gcTvnOcgVF53hP
+gateway/.venv/bin/python gateway/gateway.py --serial-port /dev/ttyACM0 --host auto
 ```
 
 ### 8.4 Autonomous Raspberry Pi Zero 2W Deployment
