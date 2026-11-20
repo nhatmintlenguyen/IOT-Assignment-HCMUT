@@ -7,20 +7,33 @@ namespace {
 // Address 33 (0x21) is retained from the existing firmware.
 LiquidCrystal_I2C lcd(33, 16, 2);
 
-constexpr uint8_t TOTAL_PAGES = 4;
+constexpr uint8_t TOTAL_PAGES = 3;
 constexpr uint32_t PAGE_DURATION_MS = 4000; // 4 seconds auto-scroll per user request
 constexpr uint32_t DISPLAY_REFRESH_INTERVAL_MS = 200;
+constexpr uint32_t BACKLIGHT_TIMEOUT_MS = 60000; // 1 minute auto-sleep timeout
 
-uint8_t currentPage = 1; // 0 = Welcome, 1 = Climate, 2 = Light/State, 3 = Distance
+uint8_t currentPage = 1; // 0 = Welcome, 1 = Climate, 2 = Light/State
 uint32_t lastPageChangeMs = 0;
 uint32_t lastDisplayUpdateMs = 0;
-uint32_t approachDetectedMs = 0;
+uint32_t lastActivityMs = 0;
 uint32_t bootUntilMs = 0;
 bool wasStandby = false;
 bool manualNav = false;
+bool backlightEnabled = true;
 char notifyLine0[17] = "";
 char notifyLine1[17] = "";
 uint32_t notifyUntilMs = 0;
+
+void set_backlight(bool on) {
+    if (backlightEnabled != on) {
+        backlightEnabled = on;
+        if (on) {
+            lcd.backlight();
+        } else {
+            lcd.noBacklight();
+        }
+    }
+}
 
 void print_padded_line(uint8_t row, const char* text) {
     lcd.setCursor(0, row);
@@ -32,28 +45,35 @@ void print_padded_line(uint8_t row, const char* text) {
 }
 }
 
+void lcd_display_wake() {
+    lastActivityMs = millis();
+    if (!backlightEnabled) {
+        set_backlight(true);
+        lastDisplayUpdateMs = 0; // Force immediate LCD redraw
+    }
+}
+
 void lcd_display_begin() {
     lcd.begin();
     lcd.backlight();
     lcd.clear();
     bootUntilMs = millis() + 2000; // Keep startup splash screen visible for 2 seconds
+    lastActivityMs = millis();
+    backlightEnabled = true;
     print_padded_line(0, "Smart Safe");
     print_padded_line(1, "Guardian v1.0");
 }
 
 void lcd_display_next_page() {
-    manualNav = true;
-    currentPage = (currentPage + 1) % TOTAL_PAGES;
-    lastDisplayUpdateMs = 0; // Force immediate LCD redraw
+    lcd_display_wake();
 }
 
 void lcd_display_prev_page() {
-    manualNav = true;
-    currentPage = (currentPage + TOTAL_PAGES - 1) % TOTAL_PAGES;
-    lastDisplayUpdateMs = 0; // Force immediate LCD redraw
+    lcd_display_wake();
 }
 
 void lcd_show_notification(const char* line0, const char* line1, uint32_t durationMs) {
+    lcd_display_wake();
     snprintf(notifyLine0, sizeof(notifyLine0), "%s", line0 ? line0 : "");
     snprintf(notifyLine1, sizeof(notifyLine1), "%s", line1 ? line1 : "");
     notifyUntilMs = millis() + durationMs;
@@ -69,13 +89,38 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
     }
 
     const bool isStandby = (status.standbyActive || sensors.personNear);
+    const uint8_t pinCount = ir_reader_get_pin_count();
 
-    // 1. Transition into detected proximity / standby
+    // Any physical or security event wakes up the screen and keeps it active
+    const bool activeEvent = isStandby ||
+                             status.breachActive ||
+                             status.lockdownActive ||
+                             (status.lockState == LockState::Unlocked) ||
+                             is_pairing_mode_active() ||
+                             (pinCount > 0) ||
+                             ir_reader_is_pin_error() ||
+                             ir_reader_is_presence_error() ||
+                             ir_reader_is_pin_success() ||
+                             (now < notifyUntilMs);
+
+    if (activeEvent) {
+        lastActivityMs = now;
+        if (!backlightEnabled) {
+            set_backlight(true);
+            lastDisplayUpdateMs = 0; // Immediate redraw on wake
+        }
+    } else {
+        // Auto sleep after 1 minute of complete inactivity
+        if (backlightEnabled && (now - lastActivityMs >= BACKLIGHT_TIMEOUT_MS)) {
+            set_backlight(false);
+        }
+    }
+
+    // 1. Transition into detected proximity / standby -> IMMEDIATELY PAGE 0!
     if (isStandby && !wasStandby) {
         wasStandby = true;
         manualNav = false;
-        approachDetectedMs = now;
-        currentPage = 3; // Display distance/proximity screen first!
+        currentPage = 0; // Immediate Welcome / Interaction screen without delay!
         lastDisplayUpdateMs = 0;
     } 
     // 2. Transition to person departure / exit standby
@@ -87,17 +132,11 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
         lastDisplayUpdateMs = 0;
     }
 
-    // Switch to "Welcome / Badge or IR PIN" after 2s (unless manual navigation active)
-    if (isStandby && !manualNav && currentPage == 3 && (now - approachDetectedMs >= 2000)) {
-        currentPage = 0; // Welcome Page
-        lastDisplayUpdateMs = 0;
-    }
-
     // Auto-scroll ONLY in normal idle mode (no proximity/standby active)
     bool pageChanged = false;
     if (!isStandby) {
         if (now - lastPageChangeMs >= PAGE_DURATION_MS) {
-            currentPage = (currentPage % 3) + 1; // Cycles between pages 1, 2, 3
+            currentPage = (currentPage == 1) ? 2 : 1; // Cycles between Climate (1) and Security/Light (2)
             lastPageChangeMs = now;
             pageChanged = true;
         }
@@ -107,6 +146,11 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
         return;
     }
     lastDisplayUpdateMs = now;
+
+    // While backlight is sleeping and safe is idle, avoid writing to I2C bus
+    if (!backlightEnabled) {
+        return;
+    }
 
     // --- TRANSIENT NOTIFICATION (Method / Action feedback for ~1.2s) ---
     if (now < notifyUntilMs) {
@@ -148,7 +192,7 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
     }
 
     const uint8_t pinState = ir_reader_get_pin_state();
-    const uint8_t pinCount = ir_reader_get_pin_count();
+    // pinCount already fetched above
 
     // 4. Change PIN Prompts (prioritaire si en cours)
     if (pinState == 1 && status.lockState == LockState::Locked) {
@@ -214,9 +258,21 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
 
     // --- STANDARD PAGES / MANUAL INSPECTION ---
 
-    // Page 0: Welcome / Access instructions
+    // Page 0: Interactive Welcome + Real-time Distance
     if (currentPage == 0) {
-        print_padded_line(0, "Welcome");
+        char line0[17];
+        if (sensors.distanceValid) {
+            char distStr[7];
+            if (sensors.distanceCm < 100.0f) {
+                snprintf(distStr, sizeof(distStr), "%4.1fcm", sensors.distanceCm);
+            } else {
+                snprintf(distStr, sizeof(distStr), "%4.0fcm", sensors.distanceCm);
+            }
+            snprintf(line0, sizeof(line0), "Welcome | %-6s", distStr);
+        } else {
+            snprintf(line0, sizeof(line0), "Welcome | --.-cm");
+        }
+        print_padded_line(0, line0);
         print_padded_line(1, "Badge or IR PIN");
         return;
     }
@@ -242,19 +298,6 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
         snprintf(line, sizeof(line), "Light: %d ADC", sensors.lightAdc);
         print_padded_line(0, line);
         print_padded_line(1, status.lockState == LockState::Locked ? "State: LOCKED" : "State: UNLOCKED");
-        return;
-    }
-
-    // Page 3: Ultrasonic Distance & Proximity
-    if (currentPage == 3) {
-        char line[17];
-        if (sensors.distanceValid) {
-            snprintf(line, sizeof(line), "Distance: %.1fcm", sensors.distanceCm);
-        } else {
-            snprintf(line, sizeof(line), "Distance: --.-cm");
-        }
-        print_padded_line(0, line);
-        print_padded_line(1, sensors.personNear ? "Person: NEAR" : "Person: away");
         return;
     }
 }

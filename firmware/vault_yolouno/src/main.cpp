@@ -132,20 +132,21 @@ void onDataRecv(const uint8_t *srcMac, const uint8_t *data, int len) {
         }
 
         // --- 3. AUTHORIZED COMMAND PROCESSING ---
-        Serial.printf("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"%s\",\"counter\":%lu}\n",
-                      req.cmd, (unsigned long)req.counter);
-
         const VaultStatus status = get_vault_status();
         const SensorSnapshot sensors = get_sensor_snapshot();
 
         if (strcmp(req.cmd, "UNLOCK") == 0) {
             if (status.lockdownActive) {
                 strcpy(resp.status, "DENIED_LOCKDOWN");
+                Serial.println("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"UNLOCK\",\"result\":\"denied_lockdown\"}");
             } else if (status.lockState == LockState::Unlocked) {
                 strcpy(resp.status, "ALREADY_OPEN");
+                lcd_show_notification("BADGE DENIED", "Already open");
+                Serial.println("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"UNLOCK\",\"result\":\"already_open\"}");
             } else if (!sensors.personNear && !status.standbyActive) {
                 strcpy(resp.status, "DENIED_PRESENCE");
                 lcd_show_notification("BADGE DENIED", "Approach first");
+                Serial.println("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"UNLOCK\",\"result\":\"denied_no_presence\"}");
             } else {
                 if (status.breachActive) {
                     acknowledge_breach();
@@ -155,6 +156,7 @@ void onDataRecv(const uint8_t *srcMac, const uint8_t *data, int len) {
                 }
                 request_unlock();
                 strcpy(resp.status, "OK_UNLOCKED");
+                Serial.println("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"UNLOCK\",\"result\":\"granted\"}");
             }
         } else if (strcmp(req.cmd, "LOCK") == 0) {
             if (status.breachActive) {
@@ -163,10 +165,13 @@ void onDataRecv(const uint8_t *srcMac, const uint8_t *data, int len) {
                 lcd_show_notification("BADGE", "Breach Acked");
             } else if (status.lockState == LockState::Locked) {
                 strcpy(resp.status, "ALREADY_LOCKED");
+                lcd_show_notification("BADGE DENIED", "Already locked");
+                Serial.println("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"LOCK\",\"result\":\"already_locked\"}");
             } else {
                 set_lock_state(LockState::Locked);
                 strcpy(resp.status, "OK_LOCKED");
                 lcd_show_notification("BADGE", "Vault Locked");
+                Serial.println("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"LOCK\",\"result\":\"locked\"}");
             }
         } else if (strcmp(req.cmd, "FAKE_BADGE") == 0) {
             Serial.println("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"FAKE_BADGE\",\"result\":\"denied_unauthorized\",\"alert\":\"ROGUE_BADGE_DETECTED\"}");
@@ -180,6 +185,7 @@ void onDataRecv(const uint8_t *srcMac, const uint8_t *data, int len) {
                 lcd_show_notification("BADGE", "Breach Acked");
             } else {
                 strcpy(resp.status, "NO_ALERT_TO_ACK");
+                Serial.println("{\"type\":\"event\",\"source\":\"badge_espnow\",\"action\":\"no_alert_to_ack\"}");
             }
         }
 
@@ -324,6 +330,7 @@ void setup() {
   WiFi.disconnect();
   esp_wifi_start();
   esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
+  esp_wifi_set_ps(WIFI_PS_NONE);
 
   uint8_t mac[6];
   esp_read_mac(mac, ESP_MAC_WIFI_STA);
@@ -361,6 +368,7 @@ void loop() {
   static int lastBootState = HIGH;
   const int bootReading = digitalRead(PIN_BOOT_BUTTON);
   if (bootReading == LOW && lastBootState == HIGH) {
+    lcd_display_wake();
     Serial.println("[BUTTON] BOOT button pressed on YoloUNO -> Entering Pairing Mode!");
     start_pairing_mode();
   }
@@ -376,10 +384,12 @@ void loop() {
     } else if (cmd == "unlock" || cmd.indexOf("unlock") >= 0) {
       Serial.println("[CMD] 'unlock' command received via USB");
       request_unlock();
+      Serial.println("{\"type\":\"event\",\"source\":\"system\",\"action\":\"unlock\",\"state\":\"UNLOCKED\"}");
       lcd_show_notification("WEB / CLOUD", "Access Granted");
     } else if (cmd == "lock" || (cmd.indexOf("lock") >= 0 && cmd.indexOf("lockdown") < 0)) {
       Serial.println("[CMD] 'lock' command received via USB");
       set_lock_state(LockState::Locked);
+      Serial.println("{\"type\":\"event\",\"source\":\"system\",\"action\":\"manual_lock\",\"state\":\"LOCKED\"}");
       lcd_show_notification("WEB / CLOUD", "Vault Locked");
     } else if (cmd == "ack" || cmd.indexOf("ack") >= 0 || cmd == "reset") {
       Serial.println("[CMD] 'ack' command received via USB");

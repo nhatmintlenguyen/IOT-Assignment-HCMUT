@@ -75,7 +75,6 @@ void set_lock_state(LockState state) {
 void request_unlock() {
     reset_failed_attempts();
     set_lock_state(LockState::Unlocked);
-    Serial.println("{\"type\":\"event\",\"event\":\"access\",\"status\":\"granted\"}");
 }
 
 void trigger_breach() {

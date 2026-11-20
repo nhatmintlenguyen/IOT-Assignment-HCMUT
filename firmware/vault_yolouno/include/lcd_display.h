@@ -5,6 +5,7 @@
 
 void lcd_display_begin();
 void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status);
+void lcd_display_wake();
 
 // Manual navigation across LCD display pages (via IR remote)
 void lcd_display_next_page();

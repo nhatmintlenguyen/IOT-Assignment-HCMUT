@@ -61,6 +61,7 @@ void ir_reader_tick() {
     }
 
     if (IrReceiver.decode()) {
+        lcd_display_wake();
         if (!(IrReceiver.decodedIRData.flags & IRDATA_FLAGS_IS_REPEAT)) {
             const uint16_t command = IrReceiver.decodedIRData.command;
             const char key = ir_code_to_char(command);
@@ -268,16 +269,10 @@ void ir_reader_tick() {
                 pinLength = 0;
                 pinBuffer[0] = '\0';
             }
-            // 7. Arrow keys: manual LCD page navigation
-            else if (command == IR_KEY_RIGHT || command == IR_KEY_UP) {
-                lcd_display_next_page();
+            // 7. Arrow keys: no longer used for page scrolling, wake display if sleeping
+            else if (command == IR_KEY_RIGHT || command == IR_KEY_UP || command == IR_KEY_LEFT || command == IR_KEY_DOWN) {
+                lcd_display_wake();
                 extend_standby_if_active();
-                Serial.println("{\"type\":\"event\",\"source\":\"ir_nav\",\"action\":\"next_page\"}");
-            }
-            else if (command == IR_KEY_LEFT || command == IR_KEY_DOWN) {
-                lcd_display_prev_page();
-                extend_standby_if_active();
-                Serial.println("{\"type\":\"event\",\"source\":\"ir_nav\",\"action\":\"prev_page\"}");
             }
             // 7. Other / unhandled key
             else {

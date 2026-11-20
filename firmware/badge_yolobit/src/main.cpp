@@ -205,6 +205,7 @@ void setup() {
     WiFi.disconnect();
     esp_wifi_start();
     esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
+    esp_wifi_set_ps(WIFI_PS_NONE);
 
     uint8_t myMac[6];
     esp_read_mac(myMac, ESP_MAC_WIFI_STA);
