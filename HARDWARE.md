@@ -10,7 +10,7 @@ This document details all physical hardware components provided in the **OhStem 
 
 | Device | Chipset & Technical Features | Project Functional Role |
 | :--- | :--- | :--- |
-| **YoloUNO** | **ESP32-S3 Dual-Core Xtensa LX7 @ 240 MHz**<br>• 512 KB SRAM, 8 MB Flash<br>• Wi-Fi 2.4 GHz (802.11 b/g/n) + BLE 5.0<br>• Arduino Uno R3 form factor with **12 onboard Grove connectors**<br>• 4 dedicated GVS servo headers, native USB Type-C, 7–12V DC power jack | **Central Vault Controller (Vault Unit)**: Sensor acquisition, access authentication, deadbolt servo actuation, serial Gateway communication, and embedded emergency Web Server. |
+| **YoloUNO** | **ESP32-S3 Dual-Core Xtensa LX7 @ 240 MHz**<br>• 512 KB SRAM, 8 MB Flash<br>• Wi-Fi 2.4 GHz (802.11 b/g/n) + BLE 5.0<br>• Arduino Uno R3 form factor with **12 onboard Grove connectors**<br>• 4 dedicated GVS servo headers, native USB Type-C, 7–12V DC power jack | **Central Vault Controller (Vault Unit)**: Sensor acquisition, access authentication, deadbolt servo actuation, FreeRTOS scheduler, and serial Gateway communication. |
 | **Yolo:Bit** | **ESP32 Dual-Core**<br>• 5×5 programmable RGB LED Matrix (25 addressable pixels)<br>• 2 tactile pushbuttons (Button A and B)<br>• Integrated piezoelectric buzzer<br>• 3-axis accelerometer / gyroscope<br>• Powered via 2× AAA battery pack (3V) or USB Type-C | **Wearable Security Badge**: Wireless access requests via ESP-NOW (Button A) or silent duress / panic alarms (Button B), with real-time audio and visual status feedback. |
 
 #### YoloUNO Grove slot rows
@@ -48,7 +48,7 @@ are not part of these three Grove rows.
 
 | Module | Interface | Role in Secure Vault | Status |
 | :--- | :--- | :--- | :---: |
-| **Servo Motor (MG90 / SG90)** | **PWM (50 Hz)** — Dedicated GVS Port | Mechanical door deadbolt mechanism (0° = Unlocked, 90° = Locked). | **Selected** |
+| **Servo Motor (MG90 / SG90)** | **PWM (50 Hz)** — Dedicated GVS Port | Mechanical door deadbolt mechanism (0° = Unlocked, 180° = Locked). | **Selected** |
 | **1602 LCD Display (PCF8574)** | **I2C** (Address `0x27` / `0x3F`) — Grove I2C Port | Local physical user interface (prompts, masked PIN input `* * * *`, status codes). | **Selected** |
 | **Onboard NeoPixel RGB LED** | **GPIO 45** (Internal 1-Wire bus) | Visual status beacon: **Green** (Unlocked), **Blue** (PIN Entry), **Red** (Locked / Alarm). | **Selected** |
 | **Onboard Heartbeat LED** | **GPIO 48** (D13 internal line) | 1 Hz periodic toggle indicating FreeRTOS task scheduler health. | **Selected** |
@@ -77,7 +77,7 @@ are not part of these three Grove rows.
 * **Mitigation Strategy:**
   1. **Recommended Demo Power Supply:** Power the YoloUNO via a modern USB 3.0 / USB-C port (delivering 900 mA to 1.5 A), a 5V 2A smartphone wall adapter, or an external power bank.
   2. **External DC Supply via Barrel Jack:** The YoloUNO features an onboard 5521 DC barrel jack accepting 7V to 12V DC. The onboard linear voltage regulator comfortably supplies the high-current GVS servo rail.
-  3. **Mechanical Calibration:** Calibrate the PWM sweep angle (e.g., 10° to 80° rather than forcing hard stops at 0° and 90°) to guarantee that the servo horn never stalls against a physical barrier.
+  3. **Mechanical Calibration:** Calibrate the PWM sweep angle (0° unlocked to 180° locked full mechanical travel) to guarantee that the servo horn engages firmly without continuous physical stall.
 
 ---
 
@@ -85,7 +85,7 @@ are not part of these three Grove rows.
 * The kit includes an optocoupled **2-channel Relay Module**.
 * **Advantage:** Complete galvanic isolation between control signals and power circuits.
 * **Alternative Scenario:** If simulating an industrial high-security vault equipped with a 12V electromagnetic lock (*maglock*) or solenoid bolt, the relay can switch this external loop without electrical interference on the microcontroller.
-* For the project scope, the **MG90 Servomotor** remains the primary actuator choice because its 90° mechanical rotation provides immediate, undeniable visual evidence in the video demonstration.
+* For the project scope, the **MG90 Servomotor** remains the primary actuator choice because its 180° mechanical rotation provides immediate, undeniable visual evidence in the video demonstration.
 
 ---
 

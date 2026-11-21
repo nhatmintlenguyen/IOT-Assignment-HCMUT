@@ -144,6 +144,13 @@ class SmartSafeGateway:
         self.telegram_enabled = bool(self.telegram_token and self.telegram_chat_ids and not disable_telegram)
         self._telegram_breach_notified = False
 
+        # Thermal Anomaly Alert Configuration (T13)
+        self._thermal_state = None
+        self.TEMP_HOT_THRESHOLD = float(os.getenv("TEMP_HOT_THRESHOLD", "35.0"))
+        self.TEMP_COLD_THRESHOLD = float(os.getenv("TEMP_COLD_THRESHOLD", "20.0"))
+        self.TEMP_HOT_CLEAR = float(os.getenv("TEMP_HOT_CLEAR", "33.5"))
+        self.TEMP_COLD_CLEAR = float(os.getenv("TEMP_COLD_CLEAR", "21.0"))
+
         # CoreIOT Cloud Mirroring Configuration (Optional Dual-Broker T15)
         self.coreiot_host = (os.getenv("COREIOT_HOST", "")).strip()
         self.coreiot_port = int(os.getenv("COREIOT_PORT", "1883"))
@@ -255,6 +262,77 @@ class SmartSafeGateway:
             "🔒 <i>Vault security perimeter re-armed and monitored.</i>"
         )
         self.send_telegram_message(msg, parse_mode="HTML")
+
+    def notify_thermal_alert(self, state, temp_val, vault_state="LOCKED", is_startup=False):
+        """Dispatches Thermal Anomaly - Temperature Alert to Telegram (T13)."""
+        now_str = time.strftime("%Y-%m-%d %H:%M:%S")
+        boot_tag = " (System Startup)" if is_startup else ""
+        if state == "HOT":
+            msg = (
+                f"🔥 <b>Thermal Anomaly - Temperature Alert{boot_tag}</b> 🔥\n\n"
+                f"<b>Status:</b> High Temperature Warning (HOT)\n"
+                f"<b>Reading:</b> <code>{temp_val:.1f}°C</code> (Threshold: &gt; {self.TEMP_HOT_THRESHOLD:.1f}°C)\n"
+                f"<b>Vault State:</b> <code>{vault_state}</code>\n"
+                f"<b>Timestamp:</b> <code>{now_str}</code>\n\n"
+                f"⚠️ <i>Thermal attack or overheating suspected!</i>"
+            )
+        elif state == "COLD":
+            msg = (
+                f"❄️ <b>Thermal Anomaly - Temperature Alert{boot_tag}</b> ❄️\n\n"
+                f"<b>Status:</b> Low Temperature Warning (COLD)\n"
+                f"<b>Reading:</b> <code>{temp_val:.1f}°C</code> (Threshold: &lt; {self.TEMP_COLD_THRESHOLD:.1f}°C)\n"
+                f"<b>Vault State:</b> <code>{vault_state}</code>\n"
+                f"<b>Timestamp:</b> <code>{now_str}</code>\n\n"
+                f"⚠️ <i>Freeze tampering or refrigeration anomaly detected!</i>"
+            )
+        elif state == "NORMAL":
+            msg = (
+                f"✅ <b>Thermal Anomaly - Temperature Alert</b>\n\n"
+                f"<b>Status:</b> Temperature Returned to Normal\n"
+                f"<b>Reading:</b> <code>{temp_val:.1f}°C</code> (Nominal Range: {self.TEMP_COLD_THRESHOLD:.1f}°C - {self.TEMP_HOT_THRESHOLD:.1f}°C)\n"
+                f"<b>Vault State:</b> <code>{vault_state}</code>\n"
+                f"<b>Timestamp:</b> <code>{now_str}</code>\n\n"
+                f"🔒 <i>Thermal perimeter nominal and monitored.</i>"
+            )
+        else:
+            return
+
+        self.send_telegram_message(msg, parse_mode="HTML")
+
+    def check_thermal_alert(self, temp_val, vault_state="LOCKED"):
+        """Monitors temperature transitions (HOT / COLD / NORMAL) and fires Telegram alerts (T13)."""
+        if temp_val is None or not isinstance(temp_val, (int, float)):
+            return
+
+        prev_state = self._thermal_state
+
+        if prev_state == "HOT":
+            if temp_val <= self.TEMP_HOT_CLEAR:
+                new_state = "NORMAL"
+            else:
+                new_state = "HOT"
+        elif prev_state == "COLD":
+            if temp_val >= self.TEMP_COLD_CLEAR:
+                new_state = "NORMAL"
+            else:
+                new_state = "COLD"
+        else:
+            if temp_val > self.TEMP_HOT_THRESHOLD:
+                new_state = "HOT"
+            elif temp_val < self.TEMP_COLD_THRESHOLD:
+                new_state = "COLD"
+            else:
+                new_state = "NORMAL"
+
+        if prev_state is None:
+            self._thermal_state = new_state
+            if new_state != "NORMAL":
+                print(f"{self._ts()} \033[93m[THERMAL ALERT] Initial state abnormal: {new_state} ({temp_val:.1f}°C)\033[0m")
+                self.notify_thermal_alert(new_state, temp_val, vault_state, is_startup=True)
+        elif new_state != prev_state:
+            print(f"{self._ts()} \033[93m[THERMAL ALERT] State changed: {prev_state} -> {new_state} ({temp_val:.1f}°C)\033[0m")
+            self._thermal_state = new_state
+            self.notify_thermal_alert(new_state, temp_val, vault_state, is_startup=False)
 
     def test_telegram_connection(self):
         """Sends a verification ping to Telegram and checks API response synchronously for all authorized chats."""
@@ -937,6 +1015,15 @@ class SmartSafeGateway:
             self._publish_mqtt("v1/devices/me/telemetry", payload)
             if self.debug_mode:
                 print(f"{self._ts()} [DEBUG MQTT TX] v1/devices/me/telemetry -> {payload}")
+
+            # Thermal Anomaly Alert Check (T13)
+            temp_val = obj.get("temp")
+            if temp_val is not None:
+                try:
+                    self.check_thermal_alert(float(temp_val), vault_state=obj.get("state", "LOCKED"))
+                except Exception as te:
+                    if self.debug_mode:
+                        print(f"[WARN] Thermal alert check error: {te}")
 
             # Audit logging: record door state transitions (LOCKED <-> UNLOCKED)
             current_state = obj.get("state")

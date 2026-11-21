@@ -178,8 +178,9 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
     rpc_type, rpc_base_cfg = get_system_widget_type(headers, "system.control_widgets.rpcbutton")
     tbl_type, tbl_base_cfg = get_system_widget_type(headers, "system.cards.timeseries_table")
     sw_type, sw_base_cfg = get_system_widget_type(headers, "system.control_widgets.slide_toggle_control")
+    alarm_tbl_type, alarm_tbl_base_cfg = get_system_widget_type(headers, "system.alarm_widgets.alarms_table")
 
-    def make_val(wid, title, key_name, units, decimals, icon, color, font_size=34, is_func_color=False, color_func="", post_func=None, size_x=3, size_y=4):
+    def make_val(wid, title, key_name, units, decimals, icon, color, font_size=34, is_func_color=False, color_func="", post_func=None, size_x=3, size_y=3):
         cfg = copy.deepcopy(val_base_cfg)
         cfg["title"] = ""
         cfg["showTitle"] = False
@@ -335,10 +336,10 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
             cfg["settings"]["xAxis"]["splitLinesColor"] = "rgba(255, 255, 255, 0.05)"
 
         cfg["settings"]["yAxes"] = {
-            "axis_light": make_axis("axis_light", "Light (ADC)", "#fbbf24", "left", 0, "", 0, show_split=True, min_val=0),
-            "axis_dist": make_axis("axis_dist", "Distance (cm)", "#2dd4bf", "left", 1, "cm", 0, min_val=0),
-            "axis_temp": make_axis("axis_temp", "Temp (°C)", "#f43f5e", "right", 0, "°C", 1),
-            "axis_ai": make_axis("axis_ai", "AI Score", "#818cf8", "right", 1, "", 2, min_val=0, max_val=1, interval=0.2, split_number=5)
+            "axis_light": make_axis("axis_light", "Light (ADC)", "#fbbf24", "left", 0, "", 0, show_split=True, min_val=0, max_val=1000, interval=200, split_number=5),
+            "axis_dist": make_axis("axis_dist", "Distance (cm)", "#2dd4bf", "left", 1, "cm", 0, min_val=0, max_val=100, interval=20, split_number=5),
+            "axis_temp": make_axis("axis_temp", "Temp (°C)", "#f43f5e", "right", 0, "°C", 1, min_val=0, max_val=50, interval=10, split_number=5),
+            "axis_ai": make_axis("axis_ai", "AI Score", "#818cf8", "right", 1, "", 2, min_val=0, max_val=1.0, interval=0.2, split_number=5)
         }
 
         datakeys = []
@@ -348,6 +349,7 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
                 "type": "timeseries",
                 "label": k["label"],
                 "color": k["color"],
+                "yAxisId": k.get("yAxisId", "default"),
                 "settings": {
                     "yAxisId": k.get("yAxisId", "default"),
                     "showInLegend": True,
@@ -383,12 +385,12 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
             "id": wid,
             "typeFullFqn": "system.time_series_chart",
             "type": chart_type,
-            "sizeX": 16,
-            "sizeY": 6,
+            "sizeX": 10,
+            "sizeY": 8,
             "config": cfg
         }
 
-    def make_btn(wid, title, text, method, params="{}", is_primary=True, bg_color="#1a253b", size_x=4, size_y=2):
+    def make_btn(wid, title, text, method, params="{}", is_primary=True, bg_color="#1a253b", size_x=5, size_y=1):
         c = copy.deepcopy(rpc_base_cfg)
         c["title"] = title
         c["showTitle"] = False
@@ -464,8 +466,33 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
             "id": wid,
             "typeFullFqn": "system.cards.timeseries_table",
             "type": "timeseries",
-            "sizeX": 6,
-            "sizeY": 6,
+            "sizeX": 7,
+            "sizeY": 8,
+            "config": c
+        }
+
+    def make_alarm_table(wid):
+        c = copy.deepcopy(alarm_tbl_base_cfg)
+        c["title"] = "System Security Alarms (RuleChain T12)"
+        c["showTitle"] = True
+        c["titleStyle"] = {"color": "#ffffff", "fontSize": "15px", "fontWeight": "600"}
+        c["backgroundColor"] = "#121b2d"
+        c["color"] = "#ffffff"
+        c["borderRadius"] = "14px"
+        c["dropShadow"] = True
+        c["widgetCss"] = "th, td, .mat-mdc-header-cell, .mat-header-cell { color: #ffffff !important; opacity: 1 !important; }"
+
+        if "alarmSource" in c and isinstance(c["alarmSource"], dict):
+            c["alarmSource"]["type"] = "entity"
+            c["alarmSource"]["entityAliasId"] = alias_id
+            c["alarmSource"]["name"] = "vault_alarms"
+
+        return {
+            "id": wid,
+            "typeFullFqn": "system.alarm_widgets.alarms_table",
+            "type": "alarm",
+            "sizeX": 7,
+            "sizeY": 8,
             "config": c
         }
 
@@ -485,6 +512,7 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
     w_arm_lockdown = "10000000-0000-0000-0000-000000000009"
     w_clear_lockdown = "10000000-0000-0000-0000-000000000014"
     w_ack = "10000000-0000-0000-0000-000000000008"
+    w_alarms = "10000000-0000-0000-0000-000000000016"
 
     widgets = {
         w_state: make_val(w_state, "Safe Door State", "state", "", 0, "lock", "#10b981", font_size=28, is_func_color=True, color_func='return value === "UNLOCKED" ? "#f59e0b" : "#10b981";'),
@@ -508,30 +536,33 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
         ]),
 
         w_history: make_history_table(w_history),
-        w_unlock: make_btn(w_unlock, "Unlock Safe", "🔓 UNLOCK SAFE", "unlock", size_x=3, size_y=2),
-        w_lock: make_btn(w_lock, "Lock Safe", "🔒 LOCK SAFE", "lock", size_x=3, size_y=2),
-        w_arm_lockdown: make_btn(w_arm_lockdown, "Arm Lockdown", "⛔ ARM LOCKDOWN", "setLockdown", "true", is_primary=True, bg_color="#1a253b", size_x=3, size_y=2),
-        w_clear_lockdown: make_btn(w_clear_lockdown, "Clear Lockdown", "🟢 CLEAR LOCKDOWN", "setLockdown", "false", is_primary=True, size_x=3, size_y=2),
-        w_ack: make_btn(w_ack, "Acknowledge Alarm", "🛡️ ACKNOWLEDGE ALARM", "ack", size_x=6, size_y=2)
+        w_unlock: make_btn(w_unlock, "Unlock Safe", "🔓 UNLOCK SAFE", "unlock", size_x=5, size_y=1),
+        w_lock: make_btn(w_lock, "Lock Safe", "🔒 LOCK SAFE", "lock", size_x=5, size_y=1),
+        w_arm_lockdown: make_btn(w_arm_lockdown, "Arm Lockdown", "⛔ ARM LOCKDOWN", "setLockdown", "true", is_primary=True, bg_color="#1a253b", size_x=5, size_y=1),
+        w_clear_lockdown: make_btn(w_clear_lockdown, "Clear Lockdown", "🟢 CLEAR LOCKDOWN", "setLockdown", "false", is_primary=True, size_x=5, size_y=1),
+        w_ack: make_btn(w_ack, "Acknowledge Alarm", "🛡️ ACKNOWLEDGE ALARM", "ack", size_x=4, size_y=1),
+        w_alarms: make_alarm_table(w_alarms)
     }
 
     layout_widgets = {
-        w_state: {"sizeX": 3, "sizeY": 4, "row": 0, "col": 0, "mobileOrder": 1, "mobileHeight": 4},
-        w_temp: {"sizeX": 3, "sizeY": 4, "row": 0, "col": 3, "mobileOrder": 2, "mobileHeight": 4},
-        w_hum: {"sizeX": 3, "sizeY": 4, "row": 0, "col": 6, "mobileOrder": 3, "mobileHeight": 4},
-        w_light: {"sizeX": 3, "sizeY": 4, "row": 0, "col": 9, "mobileOrder": 4, "mobileHeight": 4},
-        w_dist: {"sizeX": 3, "sizeY": 4, "row": 0, "col": 12, "mobileOrder": 5, "mobileHeight": 4},
-        w_ai: {"sizeX": 3, "sizeY": 4, "row": 0, "col": 15, "mobileOrder": 6, "mobileHeight": 4},
-        w_breach: {"sizeX": 3, "sizeY": 4, "row": 0, "col": 18, "mobileOrder": 7, "mobileHeight": 4},
-        w_lockdown_state: {"sizeX": 3, "sizeY": 4, "row": 0, "col": 21, "mobileOrder": 8, "mobileHeight": 4},
+        w_state: {"sizeX": 3, "sizeY": 3, "row": 0, "col": 0, "mobileOrder": 1, "mobileHeight": 3},
+        w_temp: {"sizeX": 3, "sizeY": 3, "row": 0, "col": 3, "mobileOrder": 2, "mobileHeight": 3},
+        w_hum: {"sizeX": 3, "sizeY": 3, "row": 0, "col": 6, "mobileOrder": 3, "mobileHeight": 3},
+        w_light: {"sizeX": 3, "sizeY": 3, "row": 0, "col": 9, "mobileOrder": 4, "mobileHeight": 3},
+        w_dist: {"sizeX": 3, "sizeY": 3, "row": 0, "col": 12, "mobileOrder": 5, "mobileHeight": 3},
+        w_ai: {"sizeX": 3, "sizeY": 3, "row": 0, "col": 15, "mobileOrder": 6, "mobileHeight": 3},
+        w_breach: {"sizeX": 3, "sizeY": 3, "row": 0, "col": 18, "mobileOrder": 7, "mobileHeight": 3},
+        w_lockdown_state: {"sizeX": 3, "sizeY": 3, "row": 0, "col": 21, "mobileOrder": 8, "mobileHeight": 3},
 
-        w_chart: {"sizeX": 12, "sizeY": 6, "row": 4, "col": 0, "mobileOrder": 9, "mobileHeight": 6},
-        w_history: {"sizeX": 6, "sizeY": 6, "row": 4, "col": 12, "mobileOrder": 10, "mobileHeight": 6},
-        w_unlock: {"sizeX": 3, "sizeY": 2, "row": 4, "col": 18, "mobileOrder": 11, "mobileHeight": 2},
-        w_lock: {"sizeX": 3, "sizeY": 2, "row": 4, "col": 21, "mobileOrder": 12, "mobileHeight": 2},
-        w_arm_lockdown: {"sizeX": 3, "sizeY": 2, "row": 6, "col": 18, "mobileOrder": 13, "mobileHeight": 2},
-        w_clear_lockdown: {"sizeX": 3, "sizeY": 2, "row": 6, "col": 21, "mobileOrder": 14, "mobileHeight": 2},
-        w_ack: {"sizeX": 6, "sizeY": 2, "row": 8, "col": 18, "mobileOrder": 15, "mobileHeight": 2}
+        w_chart: {"sizeX": 10, "sizeY": 8, "row": 3, "col": 0, "mobileOrder": 9, "mobileHeight": 8},
+        w_history: {"sizeX": 7, "sizeY": 8, "row": 3, "col": 10, "mobileOrder": 10, "mobileHeight": 8},
+        w_alarms: {"sizeX": 7, "sizeY": 8, "row": 3, "col": 17, "mobileOrder": 11, "mobileHeight": 8},
+
+        w_unlock: {"sizeX": 5, "sizeY": 1, "row": 11, "col": 0, "mobileOrder": 12, "mobileHeight": 1},
+        w_lock: {"sizeX": 5, "sizeY": 1, "row": 11, "col": 5, "mobileOrder": 13, "mobileHeight": 1},
+        w_arm_lockdown: {"sizeX": 5, "sizeY": 1, "row": 11, "col": 10, "mobileOrder": 14, "mobileHeight": 1},
+        w_clear_lockdown: {"sizeX": 5, "sizeY": 1, "row": 11, "col": 15, "mobileOrder": 15, "mobileHeight": 1},
+        w_ack: {"sizeX": 4, "sizeY": 1, "row": 11, "col": 20, "mobileOrder": 16, "mobileHeight": 1}
     }
 
     # Minimalist, clean, production dashboard configuration
@@ -639,6 +670,122 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
     return dash_id
 
 
+def ensure_rule_chain(tenant_token):
+    """Configures Root Rule Chain with automated security breach and AI anomaly alarm logic (T12)."""
+    headers = {"X-Authorization": f"Bearer {tenant_token}"}
+    rc_list = requests.get(f"{TB_URL}/api/ruleChains?pageSize=50&page=0", headers=headers).json()
+    root_rc = next((rc for rc in rc_list.get("data", []) if rc.get("root")), None)
+    if not root_rc:
+        print("[!] No root rule chain found for tenant.")
+        return
+
+    rc_id = root_rc["id"]["id"]
+    meta = requests.get(f"{TB_URL}/api/ruleChain/{rc_id}/metadata", headers=headers).json()
+    names = [n.get("name") for n in meta.get("nodes", [])]
+
+    filter_js = (
+        "var isBreach = msg.breach === true;\\n"
+        "var isLightBreach = (msg.state === 'LOCKED' || msg.state === undefined) && msg.light_adc > 500;\\n"
+        "var isAiAnomaly = msg.anomaly_score !== undefined && Number(msg.anomaly_score) >= 0.50;\\n"
+        "var isThermalAttack = msg.temp !== undefined && Number(msg.temp) > 35.0;\\n\\n"
+        "return isBreach || isLightBreach || isAiAnomaly || isThermalAttack;"
+    )
+
+    if "Detect Breach & AI Anomaly" in names:
+        for n in meta.get("nodes", []):
+            if n.get("name") == "Detect Breach & AI Anomaly":
+                n["configuration"]["jsScript"] = filter_js
+        requests.post(f"{TB_URL}/api/ruleChain/metadata", headers=headers, json=meta)
+        print("[+] Rule Chain already has security automation nodes (threshold 35.0°C updated).")
+        return
+
+    alarm_details_js = (
+        "var details = {};\\n"
+        "details.light_adc = msg.light_adc;\\n"
+        "details.temp = msg.temp;\\n"
+        "details.hum = msg.hum;\\n"
+        "details.distance_cm = msg.distance_cm;\\n"
+        "details.state = msg.state || 'LOCKED';\\n"
+        "details.anomaly_score = msg.anomaly_score;\\n"
+        "if (msg.anomaly_reason) details.reason = msg.anomaly_reason;\\n"
+        "return details;"
+    )
+
+    clear_filter_js = "return msg.breach === false && (msg.light_adc === undefined || msg.light_adc <= 500);"
+
+    node_filter = {
+        "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
+        "name": "Detect Breach & AI Anomaly",
+        "configurationVersion": 0,
+        "configuration": {"jsScript": filter_js},
+        "additionalInfo": {"layoutX": 824, "layoutY": 280}
+    }
+    node_alarm = {
+        "type": "org.thingsboard.rule.engine.action.TbCreateAlarmNode",
+        "name": "Create Security Alarm",
+        "configurationVersion": 0,
+        "configuration": {
+            "alarmType": "SECURITY_BREACH",
+            "alarmDetailsBuildJs": alarm_details_js,
+            "severity": "CRITICAL",
+            "propagate": True,
+            "useMessageAlarmData": False,
+            "overwriteAlarmDetails": False,
+            "relationTypes": []
+        },
+        "additionalInfo": {"layoutX": 1120, "layoutY": 280}
+    }
+    node_clear_filter = {
+        "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
+        "name": "Check Breach Resolved",
+        "configurationVersion": 0,
+        "configuration": {"jsScript": clear_filter_js},
+        "additionalInfo": {"layoutX": 824, "layoutY": 400}
+    }
+    node_clear_alarm = {
+        "type": "org.thingsboard.rule.engine.action.TbClearAlarmNode",
+        "name": "Clear Security Alarm",
+        "configurationVersion": 0,
+        "configuration": {
+            "alarmType": "SECURITY_BREACH",
+            "alarmDetailsBuildJs": "return details;",
+            "useMessageAlarmData": False
+        },
+        "additionalInfo": {"layoutX": 1120, "layoutY": 400}
+    }
+
+    idx_filter = len(meta["nodes"])
+    meta["nodes"].append(node_filter)
+    idx_alarm = len(meta["nodes"])
+    meta["nodes"].append(node_alarm)
+    idx_clear_filter = len(meta["nodes"])
+    meta["nodes"].append(node_clear_filter)
+    idx_clear_alarm = len(meta["nodes"])
+    meta["nodes"].append(node_clear_alarm)
+
+    # Connect to Message Type Switch (node 2)
+    meta["connections"].append({"fromIndex": 2, "toIndex": idx_filter, "type": "Post telemetry"})
+    meta["connections"].append({"fromIndex": idx_filter, "toIndex": idx_alarm, "type": "True"})
+    meta["connections"].append({"fromIndex": 2, "toIndex": idx_clear_filter, "type": "Post telemetry"})
+    meta["connections"].append({"fromIndex": idx_clear_filter, "toIndex": idx_clear_alarm, "type": "True"})
+
+    save_resp = requests.post(f"{TB_URL}/api/ruleChain/metadata", headers=headers, json=meta)
+    if save_resp.status_code == 200:
+        print("[+] Rule Chain security automation deployed successfully (T12).")
+        # Export smart_safe_rule_chain.json
+        try:
+            rc_obj = requests.get(f"{TB_URL}/api/ruleChain/{rc_id}", headers=headers).json()
+            meta_obj = requests.get(f"{TB_URL}/api/ruleChain/{rc_id}/metadata", headers=headers).json()
+            out_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dashboards", "smart_safe_rule_chain.json")
+            with open(out_path, "w", encoding="utf-8") as f:
+                json.dump({"ruleChain": rc_obj, "metadata": meta_obj}, f, indent=2)
+            print(f"[+] Rule Chain exported to {out_path} for CoreIOT import.")
+        except Exception as e:
+            print(f"[!] Rule Chain export warning: {e}")
+    else:
+        print(f"[!] Failed to update Rule Chain: {save_resp.text}")
+
+
 def main():
     print("===================================================================")
     print("  Smart Safe Guardian - ThingsBoard Automated Provisioning Script  ")
@@ -679,6 +826,10 @@ def main():
     print("[*] Deploying Smart Safe Guardian Dashboard...")
     dash_id = build_and_upload_dashboard(tenant_token, vault_dev_id)
     print(f"[+] Dashboard deployed successfully (ID: {dash_id}).")
+
+    # 6. Rule Chain Automation (T12)
+    print("[*] Configuring Rule Chain Automation & Alarm Logic (T12)...")
+    ensure_rule_chain(tenant_token)
 
     print("\n===================================================================")
     print("                    SETUP COMPLETED SUCCESSFULLY !                 ")
