@@ -8,7 +8,7 @@
         "typeFullFqn": "system.cards.value_card",
         "type": "latest",
         "sizeX": 3,
-        "sizeY": 4,
+        "sizeY": 3,
         "config": {
           "datasources": [
             {
@@ -22,7 +22,7 @@
                   "label": "Safe Door State",
                   "color": "#10b981",
                   "settings": {},
-                  "_hash": 0.1839543000687438,
+                  "_hash": 0.44688305418905216,
                   "units": "",
                   "decimals": 0,
                   "aggregationType": null,
@@ -159,7 +159,7 @@
         "typeFullFqn": "system.cards.value_card",
         "type": "latest",
         "sizeX": 3,
-        "sizeY": 4,
+        "sizeY": 3,
         "config": {
           "datasources": [
             {
@@ -173,7 +173,7 @@
                   "label": "Vault Temperature",
                   "color": "#f43f5e",
                   "settings": {},
-                  "_hash": 0.2611465584753908,
+                  "_hash": 0.2295615063785995,
                   "units": "\u00b0C",
                   "decimals": 1,
                   "aggregationType": null,
@@ -308,7 +308,7 @@
         "typeFullFqn": "system.cards.value_card",
         "type": "latest",
         "sizeX": 3,
-        "sizeY": 4,
+        "sizeY": 3,
         "config": {
           "datasources": [
             {
@@ -322,7 +322,7 @@
                   "label": "Vault Humidity",
                   "color": "#38bdf8",
                   "settings": {},
-                  "_hash": 0.965172163931031,
+                  "_hash": 0.29813671363166927,
                   "units": "%",
                   "decimals": 1,
                   "aggregationType": null,
@@ -457,7 +457,7 @@
         "typeFullFqn": "system.cards.value_card",
         "type": "latest",
         "sizeX": 3,
-        "sizeY": 4,
+        "sizeY": 3,
         "config": {
           "datasources": [
             {
@@ -471,7 +471,7 @@
                   "label": "Vault Internal Light",
                   "color": "#fbbf24",
                   "settings": {},
-                  "_hash": 0.2462437191611666,
+                  "_hash": 0.23099772954836295,
                   "units": "ADC",
                   "decimals": 0,
                   "aggregationType": null,
@@ -606,7 +606,7 @@
         "typeFullFqn": "system.cards.value_card",
         "type": "latest",
         "sizeX": 3,
-        "sizeY": 4,
+        "sizeY": 3,
         "config": {
           "datasources": [
             {
@@ -620,7 +620,7 @@
                   "label": "Proximity Distance",
                   "color": "#2dd4bf",
                   "settings": {},
-                  "_hash": 0.37779097809040163,
+                  "_hash": 0.6920898246051423,
                   "units": "cm",
                   "decimals": 0,
                   "aggregationType": null,
@@ -755,7 +755,7 @@
         "typeFullFqn": "system.cards.value_card",
         "type": "latest",
         "sizeX": 3,
-        "sizeY": 4,
+        "sizeY": 3,
         "config": {
           "datasources": [
             {
@@ -769,7 +769,7 @@
                   "label": "AI Anomaly Detection Score",
                   "color": "#818cf8",
                   "settings": {},
-                  "_hash": 0.3916774567000766,
+                  "_hash": 0.5090655002038623,
                   "units": "",
                   "decimals": 2,
                   "aggregationType": null,
@@ -904,7 +904,7 @@
         "typeFullFqn": "system.cards.value_card",
         "type": "latest",
         "sizeX": 3,
-        "sizeY": 4,
+        "sizeY": 3,
         "config": {
           "datasources": [
             {
@@ -918,7 +918,7 @@
                   "label": "Security Breach Alert",
                   "color": "#10b981",
                   "settings": {},
-                  "_hash": 0.22543696140947955,
+                  "_hash": 0.3245709187990591,
                   "units": "",
                   "decimals": 0,
                   "aggregationType": null,
@@ -1055,7 +1055,7 @@
         "typeFullFqn": "system.cards.value_card",
         "type": "latest",
         "sizeX": 3,
-        "sizeY": 4,
+        "sizeY": 3,
         "config": {
           "datasources": [
             {
@@ -1069,7 +1069,7 @@
                   "label": "Lockdown Active",
                   "color": "#10b981",
                   "settings": {},
-                  "_hash": 0.850373553817882,
+                  "_hash": 0.2793260463735563,
                   "units": "",
                   "decimals": 0,
                   "aggregationType": null,
@@ -1205,8 +1205,8 @@
         "id": "10000000-0000-0000-0000-000000000005",
         "typeFullFqn": "system.time_series_chart",
         "type": "timeseries",
-        "sizeX": 16,
-        "sizeY": 6,
+        "sizeX": 10,
+        "sizeY": 8,
         "config": {
           "datasources": [
             {
@@ -1219,6 +1219,7 @@
                   "type": "timeseries",
                   "label": "Light Level (ADC)",
                   "color": "#fbbf24",
+                  "yAxisId": "axis_light",
                   "settings": {
                     "yAxisId": "axis_light",
                     "showInLegend": true,
@@ -1234,7 +1235,7 @@
                       "showPoints": false
                     }
                   },
-                  "_hash": 0.9659233343652041,
+                  "_hash": 0.2622085884964479,
                   "units": "ADC",
                   "decimals": 0,
                   "aggregationType": null,
@@ -1247,6 +1248,7 @@
                   "type": "timeseries",
                   "label": "Sonar Distance (cm)",
                   "color": "#2dd4bf",
+                  "yAxisId": "axis_dist",
                   "settings": {
                     "yAxisId": "axis_dist",
                     "showInLegend": true,
@@ -1262,7 +1264,7 @@
                       "showPoints": false
                     }
                   },
-                  "_hash": 0.6640744287686888,
+                  "_hash": 0.10786166110594742,
                   "units": "cm",
                   "decimals": 0,
                   "aggregationType": null,
@@ -1275,6 +1277,7 @@
                   "type": "timeseries",
                   "label": "Temperature (\u00b0C)",
                   "color": "#f43f5e",
+                  "yAxisId": "axis_temp",
                   "settings": {
                     "yAxisId": "axis_temp",
                     "showInLegend": true,
@@ -1290,7 +1293,7 @@
                       "showPoints": false
                     }
                   },
-                  "_hash": 0.020484876253538453,
+                  "_hash": 0.05746466211911627,
                   "units": "\u00b0C",
                   "decimals": 1,
                   "aggregationType": null,
@@ -1303,6 +1306,7 @@
                   "type": "timeseries",
                   "label": "AI Anomaly Score",
                   "color": "#818cf8",
+                  "yAxisId": "axis_ai",
                   "settings": {
                     "yAxisId": "axis_ai",
                     "showInLegend": true,
@@ -1318,7 +1322,7 @@
                       "showPoints": false
                     }
                   },
-                  "_hash": 0.480580114485918,
+                  "_hash": 0.6884425390834289,
                   "units": "",
                   "decimals": 3,
                   "aggregationType": null,
@@ -1509,13 +1513,15 @@
                 },
                 "max": {
                   "type": "constant",
-                  "value": null,
+                  "value": 1000,
                   "latestKey": null,
                   "latestKeyType": null,
                   "entityAlias": null,
                   "entityKey": null,
                   "entityKeyType": null
-                }
+                },
+                "interval": 200,
+                "splitNumber": 5
               },
               "axis_dist": {
                 "id": "axis_dist",
@@ -1562,13 +1568,15 @@
                 },
                 "max": {
                   "type": "constant",
-                  "value": null,
+                  "value": 100,
                   "latestKey": null,
                   "latestKeyType": null,
                   "entityAlias": null,
                   "entityKey": null,
                   "entityKeyType": null
-                }
+                },
+                "interval": 20,
+                "splitNumber": 5
               },
               "axis_temp": {
                 "id": "axis_temp",
@@ -1606,7 +1614,7 @@
                 "splitLinesColor": "rgba(255, 255, 255, 0.08)",
                 "min": {
                   "type": "constant",
-                  "value": null,
+                  "value": 0,
                   "latestKey": null,
                   "latestKeyType": null,
                   "entityAlias": null,
@@ -1615,13 +1623,15 @@
                 },
                 "max": {
                   "type": "constant",
-                  "value": null,
+                  "value": 50,
                   "latestKey": null,
                   "latestKeyType": null,
                   "entityAlias": null,
                   "entityKey": null,
                   "entityKeyType": null
-                }
+                },
+                "interval": 10,
+                "splitNumber": 5
               },
               "axis_ai": {
                 "id": "axis_ai",
@@ -1668,7 +1678,7 @@
                 },
                 "max": {
                   "type": "constant",
-                  "value": 1,
+                  "value": 1.0,
                   "latestKey": null,
                   "latestKeyType": null,
                   "entityAlias": null,
@@ -1779,8 +1789,8 @@
         "id": "10000000-0000-0000-0000-000000000015",
         "typeFullFqn": "system.cards.timeseries_table",
         "type": "timeseries",
-        "sizeX": 6,
-        "sizeY": 6,
+        "sizeX": 7,
+        "sizeY": 8,
         "config": {
           "datasources": [
             {
@@ -1797,7 +1807,7 @@
                     "useCellStyleFunction": true,
                     "cellStyleFunction": "if (value === \"UNLOCKED\") return {color: \"#f59e0b\", fontWeight: \"bold\"}; if (value === \"LOCKED\") return {color: \"#10b981\", fontWeight: \"bold\"}; if (value === \"DENIED\" || value === \"REJECTED\" || value === \"ALARM\" || value === \"LOCKDOWN\") return {color: \"#ef4444\", fontWeight: \"bold\"}; return {color: \"#ffffff\"};"
                   },
-                  "_hash": 0.033523377764529294
+                  "_hash": 0.4701017978667489
                 },
                 {
                   "name": "audit_event",
@@ -1805,7 +1815,7 @@
                   "label": "Event / Diagnosis",
                   "color": "#ffffff",
                   "settings": {},
-                  "_hash": 0.9236857657798395
+                  "_hash": 0.44777823121900295
                 }
               ]
             }
@@ -1866,8 +1876,8 @@
         "id": "10000000-0000-0000-0000-000000000006",
         "typeFullFqn": "system.control_widgets.rpcbutton",
         "type": "rpc",
-        "sizeX": 3,
-        "sizeY": 2,
+        "sizeX": 5,
+        "sizeY": 1,
         "config": {
           "targetDeviceAliases": [],
           "showTitle": false,
@@ -1907,8 +1917,8 @@
         "id": "10000000-0000-0000-0000-000000000007",
         "typeFullFqn": "system.control_widgets.rpcbutton",
         "type": "rpc",
-        "sizeX": 3,
-        "sizeY": 2,
+        "sizeX": 5,
+        "sizeY": 1,
         "config": {
           "targetDeviceAliases": [],
           "showTitle": false,
@@ -1948,8 +1958,8 @@
         "id": "10000000-0000-0000-0000-000000000009",
         "typeFullFqn": "system.control_widgets.rpcbutton",
         "type": "rpc",
-        "sizeX": 3,
-        "sizeY": 2,
+        "sizeX": 5,
+        "sizeY": 1,
         "config": {
           "targetDeviceAliases": [],
           "showTitle": false,
@@ -1989,8 +1999,8 @@
         "id": "10000000-0000-0000-0000-000000000014",
         "typeFullFqn": "system.control_widgets.rpcbutton",
         "type": "rpc",
-        "sizeX": 3,
-        "sizeY": 2,
+        "sizeX": 5,
+        "sizeY": 1,
         "config": {
           "targetDeviceAliases": [],
           "showTitle": false,
@@ -2030,8 +2040,8 @@
         "id": "10000000-0000-0000-0000-000000000008",
         "typeFullFqn": "system.control_widgets.rpcbutton",
         "type": "rpc",
-        "sizeX": 6,
-        "sizeY": 2,
+        "sizeX": 4,
+        "sizeY": 1,
         "config": {
           "targetDeviceAliases": [],
           "showTitle": false,
@@ -2066,6 +2076,149 @@
           },
           "targetDeviceAlias": null
         }
+      },
+      "10000000-0000-0000-0000-000000000016": {
+        "id": "10000000-0000-0000-0000-000000000016",
+        "typeFullFqn": "system.alarm_widgets.alarms_table",
+        "type": "alarm",
+        "sizeX": 7,
+        "sizeY": 8,
+        "config": {
+          "timewindow": {
+            "selectedTab": 0,
+            "realtime": {
+              "realtimeType": 0,
+              "timewindowMs": 2592000000
+            }
+          },
+          "showTitle": true,
+          "backgroundColor": "#121b2d",
+          "color": "#ffffff",
+          "padding": "4px",
+          "settings": {
+            "enableSelection": true,
+            "enableSearch": true,
+            "displayDetails": true,
+            "allowAcknowledgment": true,
+            "allowClear": true,
+            "allowAssign": true,
+            "displayActivity": true,
+            "displayPagination": true,
+            "defaultPageSize": 10,
+            "defaultSortOrder": "-createdTime",
+            "enableSelectColumnDisplay": true,
+            "enableStickyAction": false,
+            "enableFilter": true,
+            "entitiesTitle": null,
+            "alarmsTitle": "Alarms"
+          },
+          "title": "System Security Alarms (RuleChain T12)",
+          "dropShadow": true,
+          "enableFullscreen": true,
+          "titleStyle": {
+            "color": "#ffffff",
+            "fontSize": "15px",
+            "fontWeight": "600"
+          },
+          "useDashboardTimewindow": false,
+          "showLegend": false,
+          "alarmSource": {
+            "type": "entity",
+            "dataKeys": [
+              {
+                "name": "createdTime",
+                "type": "alarm",
+                "label": "Created time",
+                "color": "#2196f3",
+                "settings": {
+                  "useCellStyleFunction": false,
+                  "cellStyleFunction": "",
+                  "useCellContentFunction": false,
+                  "cellContentFunction": ""
+                },
+                "_hash": 0.021092237451093787
+              },
+              {
+                "name": "originatorDisplayName",
+                "type": "alarm",
+                "label": "Originator",
+                "color": "#4caf50",
+                "settings": {
+                  "useCellStyleFunction": false,
+                  "cellStyleFunction": "",
+                  "useCellContentFunction": false,
+                  "cellContentFunction": ""
+                },
+                "_hash": 0.2780007688856758
+              },
+              {
+                "name": "type",
+                "type": "alarm",
+                "label": "Type",
+                "color": "#f44336",
+                "settings": {
+                  "useCellStyleFunction": false,
+                  "cellStyleFunction": "",
+                  "useCellContentFunction": false,
+                  "cellContentFunction": ""
+                },
+                "_hash": 0.7323586880398418
+              },
+              {
+                "name": "severity",
+                "type": "alarm",
+                "label": "Severity",
+                "color": "#ffc107",
+                "settings": {
+                  "useCellStyleFunction": false,
+                  "useCellContentFunction": false
+                },
+                "_hash": 0.09927019860088193
+              },
+              {
+                "name": "status",
+                "type": "alarm",
+                "label": "Status",
+                "color": "#607d8b",
+                "settings": {
+                  "useCellStyleFunction": false,
+                  "cellStyleFunction": "",
+                  "useCellContentFunction": false,
+                  "cellContentFunction": ""
+                },
+                "_hash": 0.6588418951443418
+              },
+              {
+                "name": "assignee",
+                "type": "alarm",
+                "label": "Assignee",
+                "color": "#9c27b0",
+                "settings": {},
+                "_hash": 0.5008441077416634
+              }
+            ],
+            "entityAliasId": "e7b0c510-e400-11f1-bf0b-ed890d705073",
+            "name": "vault_alarms"
+          },
+          "alarmSearchStatus": "ANY",
+          "alarmsPollingInterval": 5,
+          "showTitleIcon": false,
+          "titleIcon": "warning",
+          "iconColor": "rgba(0, 0, 0, 0.87)",
+          "iconSize": "24px",
+          "titleTooltip": "",
+          "widgetStyle": {},
+          "displayTimewindow": true,
+          "actions": {},
+          "alarmStatusList": [],
+          "alarmSeverityList": [],
+          "alarmTypeList": [],
+          "searchPropagatedAlarms": false,
+          "configMode": "basic",
+          "alarmFilterConfig": null,
+          "borderRadius": "14px",
+          "widgetCss": "th, td, .mat-mdc-header-cell, .mat-header-cell { color: #ffffff !important; opacity: 1 !important; }"
+        }
       }
     },
     "states": {
@@ -2077,123 +2230,131 @@
             "widgets": {
               "10000000-0000-0000-0000-000000000003": {
                 "sizeX": 3,
-                "sizeY": 4,
+                "sizeY": 3,
                 "row": 0,
                 "col": 0,
                 "mobileOrder": 1,
-                "mobileHeight": 4
+                "mobileHeight": 3
               },
               "10000000-0000-0000-0000-000000000001": {
                 "sizeX": 3,
-                "sizeY": 4,
+                "sizeY": 3,
                 "row": 0,
                 "col": 3,
                 "mobileOrder": 2,
-                "mobileHeight": 4
+                "mobileHeight": 3
               },
               "10000000-0000-0000-0000-000000000002": {
                 "sizeX": 3,
-                "sizeY": 4,
+                "sizeY": 3,
                 "row": 0,
                 "col": 6,
                 "mobileOrder": 3,
-                "mobileHeight": 4
+                "mobileHeight": 3
               },
               "10000000-0000-0000-0000-000000000011": {
                 "sizeX": 3,
-                "sizeY": 4,
+                "sizeY": 3,
                 "row": 0,
                 "col": 9,
                 "mobileOrder": 4,
-                "mobileHeight": 4
+                "mobileHeight": 3
               },
               "10000000-0000-0000-0000-000000000012": {
                 "sizeX": 3,
-                "sizeY": 4,
+                "sizeY": 3,
                 "row": 0,
                 "col": 12,
                 "mobileOrder": 5,
-                "mobileHeight": 4
+                "mobileHeight": 3
               },
               "10000000-0000-0000-0000-000000000010": {
                 "sizeX": 3,
-                "sizeY": 4,
+                "sizeY": 3,
                 "row": 0,
                 "col": 15,
                 "mobileOrder": 6,
-                "mobileHeight": 4
+                "mobileHeight": 3
               },
               "10000000-0000-0000-0000-000000000004": {
                 "sizeX": 3,
-                "sizeY": 4,
+                "sizeY": 3,
                 "row": 0,
                 "col": 18,
                 "mobileOrder": 7,
-                "mobileHeight": 4
+                "mobileHeight": 3
               },
               "10000000-0000-0000-0000-000000000013": {
                 "sizeX": 3,
-                "sizeY": 4,
+                "sizeY": 3,
                 "row": 0,
                 "col": 21,
                 "mobileOrder": 8,
-                "mobileHeight": 4
+                "mobileHeight": 3
               },
               "10000000-0000-0000-0000-000000000005": {
-                "sizeX": 12,
-                "sizeY": 6,
-                "row": 4,
+                "sizeX": 10,
+                "sizeY": 8,
+                "row": 3,
                 "col": 0,
                 "mobileOrder": 9,
-                "mobileHeight": 6
+                "mobileHeight": 8
               },
               "10000000-0000-0000-0000-000000000015": {
-                "sizeX": 6,
-                "sizeY": 6,
-                "row": 4,
-                "col": 12,
+                "sizeX": 7,
+                "sizeY": 8,
+                "row": 3,
+                "col": 10,
                 "mobileOrder": 10,
-                "mobileHeight": 6
+                "mobileHeight": 8
+              },
+              "10000000-0000-0000-0000-000000000016": {
+                "sizeX": 7,
+                "sizeY": 8,
+                "row": 3,
+                "col": 17,
+                "mobileOrder": 11,
+                "mobileHeight": 8
               },
               "10000000-0000-0000-0000-000000000006": {
-                "sizeX": 3,
-                "sizeY": 2,
-                "row": 4,
-                "col": 18,
-                "mobileOrder": 11,
-                "mobileHeight": 2
+                "sizeX": 5,
+                "sizeY": 1,
+                "row": 11,
+                "col": 0,
+                "mobileOrder": 12,
+                "mobileHeight": 1
               },
               "10000000-0000-0000-0000-000000000007": {
-                "sizeX": 3,
-                "sizeY": 2,
-                "row": 4,
-                "col": 21,
-                "mobileOrder": 12,
-                "mobileHeight": 2
+                "sizeX": 5,
+                "sizeY": 1,
+                "row": 11,
+                "col": 5,
+                "mobileOrder": 13,
+                "mobileHeight": 1
               },
               "10000000-0000-0000-0000-000000000009": {
-                "sizeX": 3,
-                "sizeY": 2,
-                "row": 6,
-                "col": 18,
-                "mobileOrder": 13,
-                "mobileHeight": 2
+                "sizeX": 5,
+                "sizeY": 1,
+                "row": 11,
+                "col": 10,
+                "mobileOrder": 14,
+                "mobileHeight": 1
               },
               "10000000-0000-0000-0000-000000000014": {
-                "sizeX": 3,
-                "sizeY": 2,
-                "row": 6,
-                "col": 21,
-                "mobileOrder": 14,
-                "mobileHeight": 2
+                "sizeX": 5,
+                "sizeY": 1,
+                "row": 11,
+                "col": 15,
+                "mobileOrder": 15,
+                "mobileHeight": 1
               },
               "10000000-0000-0000-0000-000000000008": {
-                "sizeX": 6,
-                "sizeY": 2,
-                "row": 8,
-                "col": 18,
-                "mobileOrder": 15,
-                "mobileHeight": 2
+                "sizeX": 4,
+                "sizeY": 1,
+                "row": 11,
+                "col": 20,
+                "mobileOrder": 16,
+                "mobileHeight": 1
               }
             },
             "gridSettings": {
