@@ -16,6 +16,8 @@ import socket
 import sys
 import time
 import threading
+import urllib.error
+import urllib.request
 import paho.mqtt.client as mqtt
 
 # Ensure unbuffered output for logging and service daemons
@@ -23,6 +25,35 @@ try:
     sys.stdout.reconfigure(line_buffering=True)
 except Exception:
     pass
+
+def load_dotenv_fallback():
+    """Loads environment variables from .env if present in root or search paths."""
+    search_dirs = [
+        os.getcwd(),
+        os.path.dirname(os.path.abspath(__file__)),
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ]
+    seen_files = set()
+    for d in search_dirs:
+        env_file = os.path.abspath(os.path.join(d, ".env"))
+        if env_file in seen_files or not os.path.isfile(env_file):
+            continue
+        seen_files.add(env_file)
+        try:
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    k = k.strip()
+                    v = v.strip().strip("'\"")
+                    if k and k not in os.environ:
+                        os.environ[k] = v
+        except Exception:
+            pass
+
+load_dotenv_fallback()
 
 # Local AI Anomaly Detector
 try:
@@ -81,7 +112,9 @@ def discover_thingsboard_server(beacon_port=50051, timeout=5.0):
 
 
 class SmartSafeGateway:
-    def __init__(self, tb_host, tb_port, tb_token, serial_port, baudrate, mock=False, gw_token=None, beacon_port=50051, fallback_host="127.0.0.1", debug=False):
+    def __init__(self, tb_host, tb_port, tb_token, serial_port, baudrate, mock=False, gw_token=None,
+                 beacon_port=50051, fallback_host="127.0.0.1", debug=False,
+                 telegram_token=None, telegram_chat_id=None, disable_telegram=False):
         self.raw_tb_host = tb_host
         self.tb_host = tb_host
         self.tb_port = tb_port
@@ -94,6 +127,12 @@ class SmartSafeGateway:
         self.baudrate = baudrate
         self.mock_mode = mock
         self.debug_mode = debug
+
+        # Telegram Intrusion Notification Configuration (T13)
+        self.telegram_token = (telegram_token or os.getenv("TELEGRAM_TOKEN", "")).strip()
+        self.telegram_chat_id = (telegram_chat_id or os.getenv("TELEGRAM_CHAT_ID", "")).strip()
+        self.telegram_enabled = bool(self.telegram_token and self.telegram_chat_id and not disable_telegram)
+        self._telegram_breach_notified = False
 
         self.serial_conn = None
         self.mqtt_client = None
@@ -128,6 +167,98 @@ class SmartSafeGateway:
             "vault_hardware": "USB CDC ONLINE",
             "gateway_status": "ONLINE (Wi-Fi MQTT)"
         }
+
+    # --------------------------------------------------------------------------
+    # TELEGRAM NOTIFICATIONS (T13)
+    # --------------------------------------------------------------------------
+    def send_telegram_message(self, text, parse_mode="HTML"):
+        """Dispatches an asynchronous Telegram alert in a daemon background thread."""
+        if not self.telegram_enabled:
+            return
+
+        def _worker():
+            url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
+            payload = json.dumps({
+                "chat_id": self.telegram_chat_id,
+                "text": text,
+                "parse_mode": parse_mode
+            }).encode("utf-8")
+
+            req = urllib.request.Request(
+                url,
+                data=payload,
+                headers={"Content-Type": "application/json", "User-Agent": "SmartSafeGateway/1.0"}
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
+                    if resp.status == 200:
+                        if self.debug_mode:
+                            print(f"{self._ts()} \033[92m[TELEGRAM] Alert delivered successfully to chat {self.telegram_chat_id}!\033[0m")
+                    else:
+                        print(f"{self._ts()} \033[93m[TELEGRAM] Non-200 response from Telegram API: {resp.status}\033[0m")
+            except Exception as e:
+                print(f"{self._ts()} \033[91m[TELEGRAM] Failed to send Telegram alert: {e}\033[0m")
+
+        t = threading.Thread(target=_worker, name="telegram-alert-worker", daemon=True)
+        t.start()
+
+    def notify_telegram_breach(self, telemetry):
+        """Dispatches a formatted physical breach alert to Telegram."""
+        now_str = time.strftime("%Y-%m-%d %H:%M:%S")
+        light_val = telemetry.get("light_adc", "N/A")
+        temp_val = telemetry.get("temp", "N/A")
+        state_val = telemetry.get("state", self.last_known_state or "LOCKED")
+        msg = (
+            "🚨 <b>SMART SAFE SECURITY ALERT</b> 🚨\n\n"
+            "<b>Event:</b> Physical Breach Detected!\n"
+            "<b>Status:</b> INTERNAL SENSOR TRIPPED\n"
+            f"<b>Vault State:</b> <code>{state_val}</code>\n"
+            f"<b>Light Level:</b> <code>{light_val}</code> ADC\n"
+            f"<b>Temperature:</b> <code>{temp_val}</code>°C\n"
+            f"<b>Timestamp:</b> <code>{now_str}</code>\n\n"
+            "⚠️ <i>Immediate physical inspection required!</i>"
+        )
+        self.send_telegram_message(msg, parse_mode="HTML")
+
+    def notify_telegram_breach_cleared(self, source="Authorized Operator"):
+        """Dispatches a breach resolution notice to Telegram."""
+        now_str = time.strftime("%Y-%m-%d %H:%M:%S")
+        msg = (
+            "✅ <b>SECURITY ALERT RESOLVED</b>\n\n"
+            "<b>Status:</b> Breach Alarm Acknowledged\n"
+            f"<b>Authorized by:</b> <code>{source}</code>\n"
+            f"<b>Timestamp:</b> <code>{now_str}</code>\n\n"
+            "🔒 <i>Vault security perimeter re-armed and monitored.</i>"
+        )
+        self.send_telegram_message(msg, parse_mode="HTML")
+
+    def test_telegram_connection(self):
+        """Sends a verification ping to Telegram and checks API response synchronously."""
+        if not self.telegram_enabled:
+            print("[ERROR] Telegram is not configured. Set TELEGRAM_TOKEN and TELEGRAM_CHAT_ID in .env.")
+            return False
+        url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
+        payload = json.dumps({
+            "chat_id": self.telegram_chat_id,
+            "text": "🔐 <b>Smart Safe Guardian</b>: Telegram bot connectivity test successful!",
+            "parse_mode": "HTML"
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={"Content-Type": "application/json", "User-Agent": "SmartSafeGateway/1.0"}
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=5.0) as resp:
+                if resp.status == 200:
+                    print(f"\033[92m[SUCCESS] Test message successfully delivered to Telegram chat {self.telegram_chat_id}!\033[0m")
+                    return True
+                else:
+                    print(f"\033[91m[ERROR] Telegram API returned HTTP status {resp.status}\033[0m")
+                    return False
+        except Exception as e:
+            print(f"\033[91m[ERROR] Telegram connection failed: {e}\033[0m")
+            return False
 
     def _ts(self):
         """Returns current local time formatted as [HH:MM:SS]."""
@@ -533,6 +664,9 @@ class SmartSafeGateway:
                     self.last_breach_state = False
                     self.mock_state["last_badge"] = "AUTHORIZED BADGE"
                     log_category = "SECURITY"
+                    if self._telegram_breach_notified:
+                        self.notify_telegram_breach_cleared(source="Badge Button")
+                        self._telegram_breach_notified = False
                 elif cmd == "PAIR_REQ":
                     event_desc = "Pairing Request Received (Badge)"
                     audit_state = "LOCKED"
@@ -631,6 +765,9 @@ class SmartSafeGateway:
                     audit_state = "LOCKED"
                     self.last_breach_state = False
                     log_category = "SECURITY"
+                    if self._telegram_breach_notified:
+                        self.notify_telegram_breach_cleared(source="IR Remote")
+                        self._telegram_breach_notified = False
                 elif result == "denied_no_presence":
                     event_desc = "IR Command Denied: Approach Vault First"
                     audit_state = "LOCKED"
@@ -687,15 +824,23 @@ class SmartSafeGateway:
                 audit_state = "LOCKED"
                 self.last_breach_state = True
                 log_category = "ALARM"
+                if not self._telegram_breach_notified:
+                    self.notify_telegram_breach(obj)
+                    self._telegram_breach_notified = True
 
             elif event_name == "breach_acknowledged":
                 if (time.time() - self._pending_operator_ack) < 2.5:
                     event_desc = "Breach Alarm Acknowledged (Web / Cloud)"
+                    ack_source = "Web / Cloud Dashboard"
                 else:
                     event_desc = "Breach Alarm Acknowledged"
+                    ack_source = "System Event"
                 audit_state = "LOCKED"
                 self.last_breach_state = False
                 log_category = "SECURITY"
+                if self._telegram_breach_notified:
+                    self.notify_telegram_breach_cleared(source=ack_source)
+                    self._telegram_breach_notified = False
 
             elif event_name == "lockdown_enabled":
                 # Suppress if triggered within 2.0s of bruteforce alarm (bruteforce already logged the incident)
@@ -775,6 +920,13 @@ class SmartSafeGateway:
             if alarm_name == "bruteforce_detected":
                 self._last_bruteforce_time = time.time()
                 event_desc = "Security Alarm: Bruteforce Lockout Engaged (60s)"
+                if not self._telegram_breach_notified:
+                    self.notify_telegram_breach({
+                        "state": "LOCKED",
+                        "light_adc": "CRITICAL (Bruteforce Lockout)",
+                        "temp": "N/A"
+                    })
+                    self._telegram_breach_notified = True
             else:
                 clean_name = str(alarm_name).replace('_', ' ').strip().title()
                 event_desc = f"Security Alarm: {clean_name}"
@@ -827,6 +979,10 @@ class SmartSafeGateway:
 
         print(f"Target ThingsBoard Host : {self.tb_host}:{self.tb_port}")
         print(f"Device Access Token     : {self.tb_token}")
+        if self.telegram_enabled:
+            print(f"Telegram Bot Alert      : \033[92mENABLED\033[0m (Chat ID: {self.telegram_chat_id})")
+        else:
+            print("Telegram Bot Alert      : DISABLED (Configure TELEGRAM_TOKEN and TELEGRAM_CHAT_ID in .env)")
 
         # 2. Connect to ThingsBoard MQTT Broker
         connected = self.connect_mqtt()
@@ -909,6 +1065,14 @@ def main():
                         help="Run with mock telemetry (no hardware required)")
     parser.add_argument("--debug", "--verbose", "-v", action="store_true",
                         help="Enable verbose debug logging (displays raw serial packets and MQTT traffic)")
+    parser.add_argument("--telegram-token", default=os.getenv("TELEGRAM_TOKEN", ""),
+                        help="Telegram Bot Token for security alerts (default: read from .env)")
+    parser.add_argument("--telegram-chat-id", default=os.getenv("TELEGRAM_CHAT_ID", ""),
+                        help="Telegram Chat ID for security alerts (default: read from .env)")
+    parser.add_argument("--disable-telegram", action="store_true",
+                        help="Disable Telegram intrusion alerts even if tokens are configured")
+    parser.add_argument("--test-telegram", action="store_true",
+                        help="Send a test notification to Telegram to verify bot connectivity and exit")
 
     args = parser.parse_args()
 
@@ -922,8 +1086,16 @@ def main():
         serial_port=args.serial_port,
         baudrate=args.baudrate,
         mock=args.mock,
-        debug=args.debug
+        debug=args.debug,
+        telegram_token=args.telegram_token,
+        telegram_chat_id=args.telegram_chat_id,
+        disable_telegram=args.disable_telegram
     )
+
+    if args.test_telegram:
+        success = gateway.test_telegram_connection()
+        sys.exit(0 if success else 1)
+
     gateway.run()
 
 

@@ -1,3 +1,6 @@
+-include .env
+export
+
 COMPOSE := docker compose
 TB      := thingsboard-ce
 # Set LOAD_DEMO=true to also create tenant@thingsboard.org and demo devices.
@@ -124,11 +127,13 @@ gateway/.venv/bin/python:
 	gateway/.venv/bin/pip install --upgrade pip
 	gateway/.venv/bin/pip install -r gateway/requirements.txt
 
-HOST ?= auto
+HOST ?= $(if $(THINGSBOARD_HOST),$(THINGSBOARD_HOST),auto)
+PORT ?= $(if $(THINGSBOARD_MQTT_PORT),$(THINGSBOARD_MQTT_PORT),1883)
+TOKEN ?= $(THINGSBOARD_TOKEN)
 ARGS ?=
 
-run-gateway: gateway/.venv/bin/python ## Start Python Gateway (auto-discovers ThingsBoard, override with HOST=1.2.3.4 ARGS="--debug")
-	gateway/.venv/bin/python gateway/gateway.py --host $(HOST) --port 1883 --token 6EzRR6gcTvnOcgVF53hP $(ARGS)
+run-gateway: gateway/.venv/bin/python ## Start Python Gateway (auto-discovers ThingsBoard, reads .env)
+	gateway/.venv/bin/python gateway/gateway.py --host $(HOST) --port $(PORT) $(if $(TOKEN),--token $(TOKEN),) $(ARGS)
 
 beacon: ## Run ThingsBoard UDP discovery beacon in foreground
 	python3 scripts/tb_beacon.py

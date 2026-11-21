@@ -12,18 +12,47 @@ import sys
 import time
 import requests
 
+def load_dotenv_fallback():
+    """Loads environment variables from .env if present in root or search paths."""
+    search_dirs = [
+        os.getcwd(),
+        os.path.dirname(os.path.abspath(__file__)),
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ]
+    seen_files = set()
+    for d in search_dirs:
+        env_file = os.path.abspath(os.path.join(d, ".env"))
+        if env_file in seen_files or not os.path.isfile(env_file):
+            continue
+        seen_files.add(env_file)
+        try:
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    k = k.strip()
+                    v = v.strip().strip("'\"")
+                    if k and k not in os.environ:
+                        os.environ[k] = v
+        except Exception:
+            pass
+
+load_dotenv_fallback()
+
 TB_URL = os.getenv("THINGSBOARD_URL", "http://localhost:8080")
 SYSADMIN_USER = os.getenv("SYSADMIN_USER", "sysadmin@thingsboard.org")
 SYSADMIN_PASS = os.getenv("SYSADMIN_PASS", "sysadmin")
 
-TENANT_TITLE = "HCMUT Smart Safe"
-TENANT_ADMIN_EMAIL = "admin@smartsafevault.com"
-TENANT_ADMIN_PASS = "tenant"
+TENANT_TITLE = os.getenv("TENANT_TITLE", "HCMUT Smart Safe")
+TENANT_ADMIN_EMAIL = os.getenv("TENANT_ADMIN_EMAIL", "admin@smartsafevault.com")
+TENANT_ADMIN_PASS = os.getenv("TENANT_ADMIN_PASS", "tenant")
 
-DEVICE_NAME = "Smart Safe Guardian"
-DEVICE_TOKEN = "6EzRR6gcTvnOcgVF53hP"
+DEVICE_NAME = os.getenv("DEVICE_NAME", "Smart Safe Guardian")
+DEVICE_TOKEN = os.getenv("DEVICE_TOKEN", os.getenv("THINGSBOARD_TOKEN", "6EzRR6gcTvnOcgVF53hP"))
 
-GATEWAY_NAME = "Smart Safe Gateway"
+GATEWAY_NAME = os.getenv("GATEWAY_NAME", "Smart Safe Gateway")
 
 
 def login(username, password):
