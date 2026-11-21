@@ -385,4 +385,28 @@ sudo journalctl -u smart-safe-gateway.service -f
 ```
 The script `scripts/rpi_boot_gateway.sh` automatically waits for network, pulls the latest code from `origin/main`, provisions the python environment, and launches the daemon targeting your ThingsBoard server.
 
+### 8.5 Automated System Benchmarks & Metrics (Report Chapter 4)
+Smart Safe Guardian includes an automated performance testing and metrics harness (`scripts/system_benchmark.py`) designed to empirically populate **Table 4.1** of the official HCMUT report:
+
+1. **Edge AI Anomaly Detection (`T09`)**: Evaluates the *Isolation Forest* against 2,500 samples (2,000 normal, 500 adversarial attack vectors: optical drill, heat torch, cryogenic freeze, flooding, loitering). Computes Confusion Matrix, Precision, Recall, Specificity, F1, and Inference Latency (< 10 ms).
+2. **Gateway Serialization Pipeline (`T08`, `T15`)**: Measures JSON decoding, normalization, and MQTT encoding throughput (frames/sec).
+3. **Remote RPC Execution Round-Trip (`T11`, `T15`)**: Measures full lifecycle latency for `unlock`, `lock`, `lockdown`, and `ack_alarm` commands.
+4. **Telegram Notification Latency (`T13`)**: Tests real HTTP API round-trip dispatch to Telegram servers.
+5. **ESP-NOW RF Reliability (`T06`)**: Analyzes packet delivery ratio (PDR) and effective loss rate with hardware retransmission.
+
+#### Running the Benchmark Suite:
+```bash
+# Mode A: Software-In-The-Loop (SIL) Simulation (CI / test without hardware):
+make benchmark
+# Or:
+gateway/.venv/bin/python scripts/system_benchmark.py --mock
+
+# Mode B: Live Physical Hardware Testing (when YoloUNO is connected via USB):
+make benchmark ARGS="--live"
+# Or target a specific port:
+gateway/.venv/bin/python scripts/system_benchmark.py --live --port /dev/ttyACM0
+```
+All measurement results are printed in a clean ASCII table and automatically saved to `docs/benchmark_results.json` for inclusion in the final report.
+
+
 

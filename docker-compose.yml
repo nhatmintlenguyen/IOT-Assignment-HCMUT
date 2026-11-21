@@ -5,7 +5,7 @@
 
 services:
   postgres:
-    restart: always
+    restart: "no"
     image: "postgres:18"
     environment:
       POSTGRES_DB: thingsboard
@@ -20,7 +20,7 @@ services:
       start_period: 10s
 
   thingsboard-ce:
-    restart: always
+    restart: "no"
     image: "thingsboard/tb-node:${TB_VERSION:-4.3.1.8}"
     depends_on:
       postgres:
@@ -42,7 +42,7 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: tb-tunnel
-    restart: unless-stopped
+    restart: "no"
     profiles: ["tunnel"]        # only started with: make tunnel
     command: tunnel --no-autoupdate run
     environment:

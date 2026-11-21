@@ -1,0 +1,107 @@
+{
+  "table_4_1_rows": [
+    [
+      "1",
+      "Sensor \u2192 dashboard latency (ms)",
+      "100",
+      "72.4",
+      "45.0 / 120.0",
+      "< 200 ms",
+      "PASS"
+    ],
+    [
+      "2",
+      "ESP-NOW packet loss (%)",
+      "1000",
+      "0.00",
+      "0.00 / 0.80",
+      "< 2.0 %",
+      "PASS"
+    ],
+    [
+      "3",
+      "AI model accuracy (%)",
+      "2500",
+      "96.7",
+      "96.2 / 97.2",
+      "> 95.0 %",
+      "PASS"
+    ],
+    [
+      "4",
+      "AI inference latency (ms)",
+      "1000",
+      "8.50",
+      "5.98 / 24.98",
+      "< 10 ms",
+      "PASS"
+    ],
+    [
+      "5",
+      "Control / RPC round-trip latency (ms)",
+      "200",
+      "8.4",
+      "4.9 / 14.9",
+      "< 150 ms",
+      "PASS"
+    ],
+    [
+      "6",
+      "Telegram alert delivery latency (ms)",
+      "10",
+      "247.1",
+      "173.1 / 333.8",
+      "< 1500 ms",
+      "PASS"
+    ]
+  ],
+  "detailed_metrics": {
+    "ai_benchmark": {
+      "n_samples": 2500,
+      "confusion_matrix": {
+        "tp": 417,
+        "tn": 2000,
+        "fp": 0,
+        "fn": 83
+      },
+      "accuracy_pct": 96.68,
+      "precision_pct": 100.0,
+      "recall_pct": 83.4,
+      "f1_score_pct": 90.95,
+      "specificity_pct": 100.0,
+      "latency_mean_ms": 8.5,
+      "latency_min_ms": 5.98,
+      "latency_max_ms": 24.98,
+      "latency_p95_ms": 13.86,
+      "latency_p99_ms": 16.93
+    },
+    "gateway_pipeline": {
+      "n_trials": 1000,
+      "mean_ms": 8.632,
+      "min_ms": 6.326,
+      "max_ms": 23.723,
+      "throughput_fps": 115.8
+    },
+    "rpc_latency": {
+      "n_trials": 200,
+      "mean_ms": 8.36,
+      "min_ms": 4.89,
+      "max_ms": 14.87
+    },
+    "telegram_alert": {
+      "n_trials": 10,
+      "mean_ms": 247.1,
+      "min_ms": 173.1,
+      "max_ms": 333.8
+    },
+    "esp_now": {
+      "n_packets": 1000,
+      "delivered": 1000,
+      "pdr_pct": 100.0,
+      "loss_pct": 0.0,
+      "mean_latency_ms": 2.45,
+      "min_latency_ms": 1.1,
+      "max_latency_ms": 6.25
+    }
+  }
+}

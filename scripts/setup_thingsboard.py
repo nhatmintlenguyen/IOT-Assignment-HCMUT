@@ -46,7 +46,7 @@ SYSADMIN_USER = os.getenv("SYSADMIN_USER", "sysadmin@thingsboard.org")
 SYSADMIN_PASS = os.getenv("SYSADMIN_PASS", "sysadmin")
 
 TENANT_TITLE = os.getenv("TENANT_TITLE", "HCMUT Smart Safe")
-TENANT_ADMIN_EMAIL = os.getenv("TENANT_ADMIN_EMAIL", "admin@smartsafevault.com")
+TENANT_ADMIN_EMAIL = os.getenv("TENANT_ADMIN_EMAIL", "admin@smartsafeguardian.com")
 TENANT_ADMIN_PASS = os.getenv("TENANT_ADMIN_PASS", "tenant")
 
 DEVICE_NAME = os.getenv("DEVICE_NAME", "Smart Safe Guardian")
@@ -542,7 +542,7 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
             "widgets": widgets,
             "states": {
                 "default": {
-                    "name": "Smart Safe Vault - Security Operations Center",
+                    "name": "Smart Safe Guardian - Security Operations Center",
                     "root": True,
                     "layouts": {
                         "main": {
@@ -564,7 +564,7 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
             "entityAliases": {
                 alias_id: {
                     "id": alias_id,
-                    "alias": "Smart Safe Vault",
+                    "alias": "Smart Safe Guardian",
                     "filter": {
                         "type": "singleEntity",
                         "singleEntity": {
@@ -622,6 +622,19 @@ def build_and_upload_dashboard(tenant_token, vault_device_id):
         save_resp = requests.post(f"{TB_URL}/api/dashboard", headers=headers, json=dashboard_config)
         if save_resp.status_code == 200:
             dash_id = save_resp.json()["id"]["id"]
+
+    # Export standalone JSON for CoreIOT cloud import
+    export_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dashboards")
+    os.makedirs(export_dir, exist_ok=True)
+    export_path = os.path.join(export_dir, "smart_safe_dashboard.json")
+    try:
+        clean_config = copy.deepcopy(dashboard_config)
+        clean_config.pop("id", None)
+        with open(export_path, "w", encoding="utf-8") as f:
+            json.dump(clean_config, f, indent=2)
+        print(f"[+] Standalone dashboard JSON exported for CoreIOT: {export_path}")
+    except Exception as ee:
+        print(f"[WARN] Could not export dashboard JSON: {ee}")
 
     return dash_id
 

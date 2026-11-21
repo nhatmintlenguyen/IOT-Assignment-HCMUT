@@ -8,3 +8,6 @@ __pycache__/
 *.log
 *.pid
 .tb_beacon.pid
+IoTReport_*_V*.docx
+IoTReport_SmartSafeGuardian_V1.docx
+scripts/generate_report*.py

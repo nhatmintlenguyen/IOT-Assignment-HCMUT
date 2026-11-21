@@ -1,5 +1,6 @@
 -include .env
 export
+MAKEFLAGS += --no-print-directory
 
 COMPOSE := docker compose
 TB      := thingsboard-ce
@@ -21,7 +22,7 @@ BADGE_PORT ?= $(if $(PORT),$(PORT),$(DETECTED_BADGE_PORT))
 MONITOR_REQUESTED := $(if $(filter monitor,$(MAKECMDGOALS)),1,$(if $(MONITOR),1,0))
 MONITOR_TARGET    := $(if $(filter 1,$(MONITOR_REQUESTED)),-t monitor,)
 
-.PHONY: help env init init-all up down restart logs ps tunnel tunnel-down reset check-pio install-pio ports build-vault flash-vault flash-vault-monitor monitor-vault build-badge flash-badge flash-badge-monitor monitor-badge run-gateway setup-rpi-service setup-thingsboard monitor beacon beacon-bg beacon-stop
+.PHONY: help env init init-all up down restart logs ps tunnel tunnel-down reset check-pio install-pio ports build-vault flash-vault flash-vault-monitor monitor-vault build-badge flash-badge flash-badge-monitor monitor-badge run-gateway setup-rpi-service setup-thingsboard monitor beacon beacon-bg beacon-stop benchmark
 
 help: ## List commands
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/ -/'
@@ -135,6 +136,9 @@ ARGS ?=
 run-gateway: gateway/.venv/bin/python ## Start Python Gateway (auto-discovers ThingsBoard, reads .env)
 	gateway/.venv/bin/python gateway/gateway.py --host $(HOST) --port $(PORT) $(if $(TOKEN),--token $(TOKEN),) $(ARGS)
 
+benchmark: gateway/.venv/bin/python ## Run automated system performance, AI accuracy, and latency benchmarks (Chapter 4)
+	gateway/.venv/bin/python scripts/system_benchmark.py
+
 beacon: ## Run ThingsBoard UDP discovery beacon in foreground
 	python3 scripts/tb_beacon.py
 
@@ -194,7 +198,6 @@ setup-thingsboard: up ## Start ThingsBoard Docker containers, wait for API readi
 	@echo ""
 	@echo "\033[92m[INFO] ThingsBoard API is UP! Running automated provisioning...\033[0m"
 	gateway/.venv/bin/python scripts/setup_thingsboard.py
-	@$(MAKE) beacon-bg
 
 init-all: init ## First-time full setup: Initialize PostgreSQL schema, start ThingsBoard, auto-provision, and start beacon
 	@echo "[INFO] Waiting for ThingsBoard container API to become ready (port 8080)..."

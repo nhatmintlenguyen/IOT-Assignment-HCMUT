@@ -86,9 +86,8 @@ class VaultAnomalyDetector:
         features = np.array([[hour, temp, hum, is_unlocked, light, dist, is_breach]])
         features_scaled = self.scaler.transform(features)
 
-        # Statistical isolation score
+        # Statistical isolation score (decision_function measures normality distance)
         raw_score = self.model.decision_function(features_scaled)[0]
-        prediction = self.model.predict(features_scaled)[0]  # -1 = outlier, 1 = normal
 
         # Physical domain risk assessment
         reasons = []

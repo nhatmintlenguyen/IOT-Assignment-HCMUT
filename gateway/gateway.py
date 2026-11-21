@@ -134,6 +134,13 @@ class SmartSafeGateway:
         self.telegram_enabled = bool(self.telegram_token and self.telegram_chat_id and not disable_telegram)
         self._telegram_breach_notified = False
 
+        # CoreIOT Cloud Mirroring Configuration (Optional Dual-Broker T15)
+        self.coreiot_host = (os.getenv("COREIOT_HOST", "")).strip()
+        self.coreiot_port = int(os.getenv("COREIOT_PORT", "1883"))
+        self.coreiot_token = (os.getenv("COREIOT_TOKEN", "")).strip()
+        self.coreiot_client = None
+        self.coreiot_connected = False
+
         self.serial_conn = None
         self.mqtt_client = None
         self.gw_client = None
@@ -187,7 +194,7 @@ class SmartSafeGateway:
             req = urllib.request.Request(
                 url,
                 data=payload,
-                headers={"Content-Type": "application/json", "User-Agent": "SmartSafeGateway/1.0"}
+                headers={"Content-Type": "application/json", "User-Agent": "SmartSafeGuardian/1.0"}
             )
             try:
                 with urllib.request.urlopen(req, timeout=5.0) as resp:
@@ -209,7 +216,7 @@ class SmartSafeGateway:
         temp_val = telemetry.get("temp", "N/A")
         state_val = telemetry.get("state", self.last_known_state or "LOCKED")
         msg = (
-            "🚨 <b>SMART SAFE SECURITY ALERT</b> 🚨\n\n"
+            "🚨 <b>SMART SAFE GUARDIAN - SECURITY ALERT</b> 🚨\n\n"
             "<b>Event:</b> Physical Breach Detected!\n"
             "<b>Status:</b> INTERNAL SENSOR TRIPPED\n"
             f"<b>Vault State:</b> <code>{state_val}</code>\n"
@@ -224,7 +231,7 @@ class SmartSafeGateway:
         """Dispatches a breach resolution notice to Telegram."""
         now_str = time.strftime("%Y-%m-%d %H:%M:%S")
         msg = (
-            "✅ <b>SECURITY ALERT RESOLVED</b>\n\n"
+            "✅ <b>SMART SAFE GUARDIAN - ALERT RESOLVED</b>\n\n"
             "<b>Status:</b> Breach Alarm Acknowledged\n"
             f"<b>Authorized by:</b> <code>{source}</code>\n"
             f"<b>Timestamp:</b> <code>{now_str}</code>\n\n"
@@ -246,7 +253,7 @@ class SmartSafeGateway:
         req = urllib.request.Request(
             url,
             data=payload,
-            headers={"Content-Type": "application/json", "User-Agent": "SmartSafeGateway/1.0"}
+            headers={"Content-Type": "application/json", "User-Agent": "SmartSafeGuardian/1.0"}
         )
         try:
             with urllib.request.urlopen(req, timeout=5.0) as resp:
@@ -436,11 +443,52 @@ class SmartSafeGateway:
                 except Exception as ge:
                     print(f"[WARN] Gateway link warning: {ge}")
 
+            # Connect optional CoreIOT cloud mirror (T15 dual-platform support)
+            if self.coreiot_token and self.coreiot_host:
+                self._connect_coreiot()
+
             return True
         except Exception as e:
             print(f"[ERROR] Could not connect to ThingsBoard MQTT broker ({self.tb_host}:{self.tb_port}): {e}")
             self.mqtt_connected = False
             return False
+
+    def _connect_coreiot(self):
+        """Connects secondary MQTT client to CoreIOT cloud platform for dual-cloud mirroring (T15)."""
+        try:
+            try:
+                self.coreiot_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="smart-safe-coreiot-mirror")
+            except AttributeError:
+                self.coreiot_client = mqtt.Client(client_id="smart-safe-coreiot-mirror")
+
+            self.coreiot_client.username_pw_set(self.coreiot_token)
+            self.coreiot_client.on_connect = self._on_coreiot_connect
+            self.coreiot_client.on_message = self._on_mqtt_message
+            self.coreiot_client.on_disconnect = lambda c, u, d, p=None: setattr(self, "coreiot_connected", False)
+            print(f"[COREIOT] Connecting to Cloud Platform at {self.coreiot_host}:{self.coreiot_port}...")
+            self.coreiot_client.connect(self.coreiot_host, self.coreiot_port, keepalive=60)
+            self.coreiot_client.loop_start()
+        except Exception as ce:
+            print(f"[WARN] Could not connect to CoreIOT cloud ({self.coreiot_host}): {ce}")
+            self.coreiot_connected = False
+
+    def _on_coreiot_connect(self, client, userdata, flags, rc, properties=None):
+        rc_code = rc if isinstance(rc, int) else getattr(rc, "value", rc)
+        if rc_code == 0:
+            self.coreiot_connected = True
+            print(f"\033[92m[COREIOT] Connected successfully to Cloud Platform ({self.coreiot_host})!\033[0m")
+            client.subscribe("v1/devices/me/rpc/request/+")
+            print("[COREIOT] Subscribed to remote Cloud RPC requests!")
+        else:
+            self.coreiot_connected = False
+            print(f"[COREIOT] Connection refused with code {rc_code}")
+
+    def _publish_mqtt(self, topic, payload_str):
+        """Publishes a payload to Local ThingsBoard and CoreIOT Cloud if connected."""
+        if self.mqtt_client and self.mqtt_connected:
+            self.mqtt_client.publish(topic, payload_str)
+        if self.coreiot_client and self.coreiot_connected:
+            self.coreiot_client.publish(topic, payload_str)
 
     def _on_mqtt_connect(self, client, userdata, flags, rc, properties=None):
         rc_code = rc if isinstance(rc, int) else getattr(rc, "value", rc)
@@ -515,9 +563,9 @@ class SmartSafeGateway:
             print(f"{self._ts()} [RPC] Unknown RPC method: '{method}'")
             response_payload["status"] = "unknown_method"
 
-        # Reply to ThingsBoard RPC response topic
+        # Reply to ThingsBoard/CoreIOT RPC response topic
         resp_topic = f"v1/devices/me/rpc/response/{req_id}"
-        self.mqtt_client.publish(resp_topic, json.dumps(response_payload))
+        client.publish(resp_topic, json.dumps(response_payload))
         if self.debug_mode:
             print(f"{self._ts()} [DEBUG MQTT TX RPC] Response sent to {resp_topic}: {response_payload}")
 
@@ -556,8 +604,7 @@ class SmartSafeGateway:
                 obj["anomaly_reason"] = reason
 
             payload = json.dumps(obj)
-            if self.mqtt_client and self.mqtt_connected:
-                self.mqtt_client.publish("v1/devices/me/telemetry", payload)
+            self._publish_mqtt("v1/devices/me/telemetry", payload)
             if self.debug_mode:
                 print(f"{self._ts()} [DEBUG MQTT TX] v1/devices/me/telemetry -> {payload}")
 
@@ -567,11 +614,10 @@ class SmartSafeGateway:
                 if self.last_known_state is not None and current_state != self.last_known_state:
                     action_time = self._last_unlock_event_time if current_state == "UNLOCKED" else self._last_lock_event_time
                     if (time.time() - action_time) >= 2.0:
-                        if self.mqtt_client and self.mqtt_connected:
-                            self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps({
-                                "audit_state": current_state,
-                                "audit_event": f"Door State Changed to {current_state.title()}"
-                            }))
+                        self._publish_mqtt("v1/devices/me/telemetry", json.dumps({
+                            "audit_state": current_state,
+                            "audit_event": f"Door State Changed to {current_state.title()}"
+                        }))
                 self.last_known_state = current_state
 
             # Periodic Gateway heartbeat
@@ -904,14 +950,13 @@ class SmartSafeGateway:
                     "audit_state": audit_state,
                     "audit_event": event_desc
                 }
-                if self.mqtt_client and self.mqtt_connected:
-                    try:
-                        p_json = json.dumps(event_payload)
-                        self.mqtt_client.publish("v1/devices/me/telemetry", p_json)
-                        if self.debug_mode:
-                            print(f"{self._ts()} [DEBUG MQTT TX] v1/devices/me/telemetry -> {p_json}")
-                    except Exception as pe:
-                        print(f"[WARN] Failed to publish audit event: {pe}")
+                try:
+                    p_json = json.dumps(event_payload)
+                    self._publish_mqtt("v1/devices/me/telemetry", p_json)
+                    if self.debug_mode:
+                        print(f"{self._ts()} [DEBUG MQTT TX] v1/devices/me/telemetry -> {p_json}")
+                except Exception as pe:
+                    print(f"[WARN] Failed to publish audit event: {pe}")
 
         # 3. Critical Security Alarms (Bruteforce detected, Light breach)
         elif msg_type == "alarm":
@@ -939,11 +984,10 @@ class SmartSafeGateway:
                 "audit_state": audit_state,
                 "audit_event": event_desc
             }
-            if self.mqtt_client and self.mqtt_connected:
-                p_json = json.dumps(alarm_payload)
-                self.mqtt_client.publish("v1/devices/me/telemetry", p_json)
-                if self.debug_mode:
-                    print(f"{self._ts()} [DEBUG MQTT TX] v1/devices/me/telemetry -> {p_json}")
+            p_json = json.dumps(alarm_payload)
+            self._publish_mqtt("v1/devices/me/telemetry", p_json)
+            if self.debug_mode:
+                print(f"{self._ts()} [DEBUG MQTT TX] v1/devices/me/telemetry -> {p_json}")
 
     def run_mock_loop(self):
         """Simulates periodic YoloUNO telemetry for standalone testing."""
@@ -979,6 +1023,10 @@ class SmartSafeGateway:
 
         print(f"Target ThingsBoard Host : {self.tb_host}:{self.tb_port}")
         print(f"Device Access Token     : {self.tb_token}")
+        if self.coreiot_token and self.coreiot_host:
+            print(f"CoreIOT Cloud Mirror    : \033[92mENABLED\033[0m ({self.coreiot_host}:{self.coreiot_port})")
+        else:
+            print("CoreIOT Cloud Mirror    : DISABLED (Set COREIOT_TOKEN in .env to mirror to HCMUT CoreIOT)")
         if self.telegram_enabled:
             print(f"Telegram Bot Alert      : \033[92mENABLED\033[0m (Chat ID: {self.telegram_chat_id})")
         else:
