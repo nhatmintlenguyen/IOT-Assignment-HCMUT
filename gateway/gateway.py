@@ -131,7 +131,10 @@ class SmartSafeGateway:
         # Telegram Intrusion Notification Configuration (T13)
         self.telegram_token = (telegram_token or os.getenv("TELEGRAM_TOKEN", "")).strip()
         self.telegram_chat_id = (telegram_chat_id or os.getenv("TELEGRAM_CHAT_ID", "")).strip()
-        self.telegram_enabled = bool(self.telegram_token and self.telegram_chat_id and not disable_telegram)
+        self.telegram_chat_ids = [
+            cid.strip() for cid in self.telegram_chat_id.replace(";", ",").split(",") if cid.strip()
+        ]
+        self.telegram_enabled = bool(self.telegram_token and self.telegram_chat_ids and not disable_telegram)
         self._telegram_breach_notified = False
 
         # CoreIOT Cloud Mirroring Configuration (Optional Dual-Broker T15)
@@ -154,6 +157,10 @@ class SmartSafeGateway:
         self._pending_operator_lock = 0
         self._pending_operator_ack = 0
         self._pending_operator_lockdown = 0
+        self._pending_telegram_user = None
+        self._pending_telegram_chat_id = None
+        self._pending_telegram_time = 0
+        self._pending_telegram_action = None
         self._recent_events = {}
         self.running = True
         self.last_breach_state = False
@@ -176,35 +183,38 @@ class SmartSafeGateway:
         }
 
     # --------------------------------------------------------------------------
-    # TELEGRAM NOTIFICATIONS (T13)
+    # TELEGRAM NOTIFICATIONS & INTERACTIVE BOT (T13)
     # --------------------------------------------------------------------------
-    def send_telegram_message(self, text, parse_mode="HTML"):
-        """Dispatches an asynchronous Telegram alert in a daemon background thread."""
+    def send_telegram_message(self, text, parse_mode="HTML", target_chat_id=None):
+        """Dispatches an asynchronous Telegram alert to one or all authorized chats in a background thread."""
         if not self.telegram_enabled:
             return
 
-        def _worker():
-            url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
-            payload = json.dumps({
-                "chat_id": self.telegram_chat_id,
-                "text": text,
-                "parse_mode": parse_mode
-            }).encode("utf-8")
+        targets = [target_chat_id] if target_chat_id else list(self.telegram_chat_ids)
 
-            req = urllib.request.Request(
-                url,
-                data=payload,
-                headers={"Content-Type": "application/json", "User-Agent": "SmartSafeGuardian/1.0"}
-            )
-            try:
-                with urllib.request.urlopen(req, timeout=5.0) as resp:
-                    if resp.status == 200:
-                        if self.debug_mode:
-                            print(f"{self._ts()} \033[92m[TELEGRAM] Alert delivered successfully to chat {self.telegram_chat_id}!\033[0m")
-                    else:
-                        print(f"{self._ts()} \033[93m[TELEGRAM] Non-200 response from Telegram API: {resp.status}\033[0m")
-            except Exception as e:
-                print(f"{self._ts()} \033[91m[TELEGRAM] Failed to send Telegram alert: {e}\033[0m")
+        def _worker():
+            for cid in targets:
+                url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
+                payload = json.dumps({
+                    "chat_id": cid,
+                    "text": text,
+                    "parse_mode": parse_mode
+                }).encode("utf-8")
+
+                req = urllib.request.Request(
+                    url,
+                    data=payload,
+                    headers={"Content-Type": "application/json", "User-Agent": "SmartSafeGuardian/1.0"}
+                )
+                try:
+                    with urllib.request.urlopen(req, timeout=5.0) as resp:
+                        if resp.status == 200:
+                            if self.debug_mode:
+                                print(f"{self._ts()} \033[92m[TELEGRAM] Message delivered successfully to chat {cid}!\033[0m")
+                        else:
+                            print(f"{self._ts()} \033[93m[TELEGRAM] Non-200 response from Telegram API for chat {cid}: {resp.status}\033[0m")
+                except Exception as e:
+                    print(f"{self._ts()} \033[91m[TELEGRAM] Failed to send Telegram alert to chat {cid}: {e}\033[0m")
 
         t = threading.Thread(target=_worker, name="telegram-alert-worker", daemon=True)
         t.start()
@@ -240,32 +250,316 @@ class SmartSafeGateway:
         self.send_telegram_message(msg, parse_mode="HTML")
 
     def test_telegram_connection(self):
-        """Sends a verification ping to Telegram and checks API response synchronously."""
+        """Sends a verification ping to Telegram and checks API response synchronously for all authorized chats."""
         if not self.telegram_enabled:
             print("[ERROR] Telegram is not configured. Set TELEGRAM_TOKEN and TELEGRAM_CHAT_ID in .env.")
             return False
-        url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
-        payload = json.dumps({
-            "chat_id": self.telegram_chat_id,
-            "text": "🔐 <b>Smart Safe Guardian</b>: Telegram bot connectivity test successful!",
-            "parse_mode": "HTML"
-        }).encode("utf-8")
-        req = urllib.request.Request(
-            url,
-            data=payload,
-            headers={"Content-Type": "application/json", "User-Agent": "SmartSafeGuardian/1.0"}
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=5.0) as resp:
-                if resp.status == 200:
-                    print(f"\033[92m[SUCCESS] Test message successfully delivered to Telegram chat {self.telegram_chat_id}!\033[0m")
-                    return True
-                else:
-                    print(f"\033[91m[ERROR] Telegram API returned HTTP status {resp.status}\033[0m")
-                    return False
-        except Exception as e:
-            print(f"\033[91m[ERROR] Telegram connection failed: {e}\033[0m")
-            return False
+        all_ok = True
+        for cid in self.telegram_chat_ids:
+            url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
+            payload = json.dumps({
+                "chat_id": cid,
+                "text": "🔐 <b>Smart Safe Guardian</b>: Telegram bot connectivity test successful!",
+                "parse_mode": "HTML"
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                url,
+                data=payload,
+                headers={"Content-Type": "application/json", "User-Agent": "SmartSafeGuardian/1.0"}
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
+                    if resp.status == 200:
+                        print(f"\033[92m[SUCCESS] Test message successfully delivered to Telegram chat {cid}!\033[0m")
+                    else:
+                        print(f"\033[91m[ERROR] Telegram API returned HTTP status {resp.status} for chat {cid}\033[0m")
+                        all_ok = False
+            except Exception as e:
+                print(f"\033[91m[ERROR] Telegram connection failed for chat {cid}: {e}\033[0m")
+                all_ok = False
+        return all_ok
+
+    def start_telegram_listener(self):
+        """Starts a background polling thread for bidirectional Telegram bot interaction."""
+        if not self.telegram_enabled:
+            return
+
+        def _listener():
+            offset = 0
+            # Skip old backlog messages on startup
+            try:
+                init_url = f"https://api.telegram.org/bot{self.telegram_token}/getUpdates?offset=-1"
+                init_req = urllib.request.Request(init_url, headers={"User-Agent": "SmartSafeGuardian/1.0"})
+                with urllib.request.urlopen(init_req, timeout=5.0) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    results = data.get("result", [])
+                    if results:
+                        offset = results[-1]["update_id"] + 1
+            except Exception:
+                pass
+
+            if self.debug_mode:
+                print(f"{self._ts()} [TELEGRAM] Interactive command listener started.")
+
+            while self.running:
+                try:
+                    url = f"https://api.telegram.org/bot{self.telegram_token}/getUpdates?offset={offset}&timeout=5"
+                    req = urllib.request.Request(url, headers={"User-Agent": "SmartSafeGuardian/1.0"})
+                    with urllib.request.urlopen(req, timeout=8.0) as resp:
+                        if resp.status == 200:
+                            data = json.loads(resp.read().decode("utf-8"))
+                            for item in data.get("result", []):
+                                offset = item["update_id"] + 1
+                                msg = item.get("message") or item.get("edited_message")
+                                if not msg:
+                                    continue
+                                chat_id = str(msg.get("chat", {}).get("id"))
+                                text = (msg.get("text") or "").strip()
+                                first_name = msg.get("from", {}).get("first_name", "User")
+                                self._handle_telegram_command(chat_id, text, first_name)
+                except (urllib.error.URLError, TimeoutError, socket.timeout):
+                    time.sleep(1.0)
+                except Exception as e:
+                    if self.debug_mode:
+                        print(f"{self._ts()} [TELEGRAM] Listener error: {e}")
+                    time.sleep(2.0)
+
+        t = threading.Thread(target=_listener, name="telegram-listener-worker", daemon=True)
+        t.start()
+
+    def _get_current_vault_state(self):
+        """Returns consolidated snapshot of vault state for Telegram feedback."""
+        st = self.mock_state if self.mock_mode else (getattr(self.detector, 'last_features', None) or {})
+        state = st.get("state", self.last_known_state or "LOCKED")
+        lockdown = bool(st.get("lockdown", False))
+        breach = bool(st.get("breach", self.last_breach_state))
+        light = st.get("light_adc", 0)
+        temp = st.get("temp", "N/A")
+        hum = st.get("hum", "N/A")
+        dist = st.get("distance_cm", "N/A")
+        return {
+            "state": state,
+            "lockdown": lockdown,
+            "breach": breach,
+            "light": light,
+            "temp": temp,
+            "hum": hum,
+            "dist": dist
+        }
+
+    def _handle_telegram_command(self, chat_id, text, first_name):
+        """Processes incoming commands from Telegram (/start, /status, /unlock, /lock, /lockdown, /unlockdown, /ack, /id)."""
+        if not text:
+            return
+        cmd = text.split()[0].lower()
+        is_authorized = (chat_id in self.telegram_chat_ids)
+
+        if cmd in ("/id", "/whoami"):
+            self.send_telegram_message(
+                f"👤 <b>Your Telegram Chat ID:</b> <code>{chat_id}</code>\n"
+                f"<b>Authorized:</b> {'✅ Yes (Registered Administrator)' if is_authorized else '❌ No (Unregistered)'}",
+                target_chat_id=chat_id
+            )
+            return
+
+        if not is_authorized:
+            print(f"{self._ts()} \033[93m[SECURITY] Unauthorized Telegram request blocked from {first_name} (Chat ID: {chat_id}) - Command: '{cmd}'\033[0m")
+            denied_msg = (
+                "⛔ <b>Access Denied</b> - you're not registered as a SmartSafeGuardian Administrator\n\n"
+                f"Hello <b>{first_name}</b>, your Telegram Chat ID (<code>{chat_id}</code>) is not authorized to control this vault.\n\n"
+                "• <b>Security Policy:</b> Role-Based Access Control (RBAC) Active\n"
+                "• <b>Audit Status:</b> Incident recorded to ThingsBoard audit trail.\n\n"
+                "<i>To request administrator access, please provide your Chat ID to the system owner.</i>"
+            )
+            self.send_telegram_message(denied_msg, target_chat_id=chat_id)
+            # Log security audit to ThingsBoard
+            event_desc = f"Unauthorized Telegram Access Blocked ({first_name})"
+            print(f"{self._ts()} [SECURITY] {event_desc} | State: LOCKED")
+            try:
+                self._publish_mqtt("v1/devices/me/telemetry", json.dumps({
+                    "audit_state": "LOCKED",
+                    "audit_event": event_desc
+                }))
+            except Exception:
+                pass
+            return
+
+        if cmd in ("/start", "/help"):
+            reply = (
+                f"🔐 <b>Smart Safe Guardian - Security Center</b>\n\n"
+                f"Welcome, <b>{first_name}</b>! You are registered for vault alerts.\n\n"
+                f"<b>Available Commands:</b>\n"
+                f"• /status - Live vault state & sensor readings\n"
+                f"• /unlock - Remotely unlock the safe\n"
+                f"• /lock - Remotely lock the safe\n"
+                f"• /lockdown - Arm emergency vault lockdown\n"
+                f"• /unlockdown - Clear emergency lockdown\n"
+                f"• /ack - Acknowledge active breach alarm\n"
+                f"• /id - Show your Telegram Chat ID"
+            )
+            self.send_telegram_message(reply, target_chat_id=chat_id)
+
+        elif cmd == "/status":
+            cur = self._get_current_vault_state()
+            breach_str = "🚨 TRIPPED" if cur["breach"] else "✅ OK (NORMAL)"
+            lockdown_str = "🔴 ARMED (ALL ACCESS BLOCKED)" if cur["lockdown"] else "🟢 INACTIVE (NORMAL)"
+            reply = (
+                f"📊 <b>Smart Safe Guardian - Live Status</b>\n\n"
+                f"• <b>Vault State:</b> <code>{cur['state']}</code>\n"
+                f"• <b>Breach Status:</b> <code>{breach_str}</code>\n"
+                f"• <b>Emergency Lockdown:</b> <code>{lockdown_str}</code>\n"
+                f"• <b>Internal Light:</b> <code>{cur['light']}</code> ADC\n"
+                f"• <b>Temperature:</b> <code>{cur['temp']}</code> °C\n"
+                f"• <b>Humidity:</b> <code>{cur['hum']}</code> %\n"
+                f"• <b>Distance:</b> <code>{cur['dist']}</code> cm\n"
+                f"• <b>Gateway Link:</b> <code>CONNECTED</code>"
+            )
+            self.send_telegram_message(reply, target_chat_id=chat_id)
+
+        elif cmd == "/unlock":
+            cur = self._get_current_vault_state()
+            if cur["lockdown"]:
+                print(f"{self._ts()} [TELEGRAM] UNLOCK DENIED for {first_name} ({chat_id}): Vault is in Lockdown")
+                msg = (
+                    f"⛔ <b>Unlock Denied: System in Lockdown!</b>\n\n"
+                    f"Requested by: <b>{first_name}</b>\n"
+                    f"• <b>Door State:</b> <code>LOCKED</code>\n"
+                    f"• <b>Status:</b> All physical and remote access is blocked.\n"
+                    f"• <b>Resolution:</b> Use /unlockdown to clear lockdown first."
+                )
+                self.send_telegram_message(msg, target_chat_id=chat_id)
+                return
+
+            if cur["state"] == "UNLOCKED":
+                msg = (
+                    f"ℹ️ <b>Vault Already Open</b>\n\n"
+                    f"Verified by: <b>{first_name}</b>\n"
+                    f"• <b>Door State:</b> <code>UNLOCKED</code>\n"
+                    f"• <i>No action taken (servo latch already open).</i>"
+                )
+                self.send_telegram_message(msg, target_chat_id=chat_id)
+                return
+
+            print(f"{self._ts()} [TELEGRAM] Remote UNLOCK requested by {first_name} ({chat_id})")
+            self._pending_telegram_user = first_name
+            self._pending_telegram_chat_id = chat_id
+            self._pending_telegram_time = time.time()
+            self._pending_telegram_action = "unlock"
+            self.write_serial("unlock")
+            msg = (
+                f"🔓 <b>Door Unlocked</b> (by {first_name})\n\n"
+                f"• <b>Door State:</b> <code>UNLOCKED</code>\n"
+                f"• <b>Auto-Lock:</b> Timer armed (10s)\n"
+                f"• <b>Internal Light:</b> <code>{cur['light']}</code> ADC"
+            )
+            # Broadcast state change to all authorized admins
+            self.send_telegram_message(msg)
+
+        elif cmd == "/lock":
+            cur = self._get_current_vault_state()
+            if cur["state"] == "LOCKED":
+                msg = (
+                    f"🔒 <b>Vault Already Locked</b>\n\n"
+                    f"Verified by: <b>{first_name}</b>\n"
+                    f"• <b>Door State:</b> <code>LOCKED</code>\n"
+                    f"• <b>Perimeter:</b> Active & Secure"
+                )
+                self.send_telegram_message(msg, target_chat_id=chat_id)
+                return
+
+            print(f"{self._ts()} [TELEGRAM] Remote LOCK requested by {first_name} ({chat_id})")
+            self._pending_telegram_user = first_name
+            self._pending_telegram_chat_id = chat_id
+            self._pending_telegram_time = time.time()
+            self._pending_telegram_action = "lock"
+            self.write_serial("lock")
+            msg = (
+                f"🔒 <b>Door Locked</b> (by {first_name})\n\n"
+                f"• <b>Door State:</b> <code>LOCKED</code>\n"
+                f"• <b>Perimeter:</b> Armed & Secure"
+            )
+            # Broadcast state change to all authorized admins
+            self.send_telegram_message(msg)
+
+        elif cmd in ("/lockdown", "/lockdown_on"):
+            tokens = text.strip().split()
+            if len(tokens) > 1 and tokens[1].lower() in ("off", "0", "disable", "stop"):
+                print(f"{self._ts()} [TELEGRAM] Remote LOCKDOWN DISABLE requested by {first_name} ({chat_id})")
+                self._pending_telegram_user = first_name
+                self._pending_telegram_chat_id = chat_id
+                self._pending_telegram_time = time.time()
+                self._pending_telegram_action = "lockdown_off"
+                self.write_serial("lockdown 0")
+                msg = (
+                    f"🟢 <b>Emergency Lockdown Cleared</b> (by {first_name})\n\n"
+                    f"• <b>Door State:</b> <code>LOCKED</code>\n"
+                    f"• <b>Physical Access:</b> Restored (PIN & Badges enabled)\n"
+                    f"• <b>Perimeter:</b> Secure"
+                )
+                # Broadcast to all admins
+                self.send_telegram_message(msg)
+            else:
+                print(f"{self._ts()} [TELEGRAM] Remote LOCKDOWN ENABLE requested by {first_name} ({chat_id})")
+                self._pending_telegram_user = first_name
+                self._pending_telegram_chat_id = chat_id
+                self._pending_telegram_time = time.time()
+                self._pending_telegram_action = "lockdown_on"
+                self.write_serial("lockdown 1")
+                msg = (
+                    f"🚨 <b>EMERGENCY LOCKDOWN ARMED</b> (by {first_name})\n\n"
+                    f"• <b>Door State:</b> <code>LOCKED</code> (Forced)\n"
+                    f"• <b>Physical Access:</b> 🔴 BLOCKED (All PINs & Badges rejected)\n"
+                    f"• <b>LED Indicator:</b> Solid Magenta\n\n"
+                    f"👉 <i>Use /unlockdown to restore normal operation.</i>"
+                )
+                # Broadcast to all admins
+                self.send_telegram_message(msg)
+
+        elif cmd in ("/unlockdown", "/lockdown_off", "/clearlockdown"):
+            print(f"{self._ts()} [TELEGRAM] Remote LOCKDOWN DISABLE requested by {first_name} ({chat_id})")
+            self._pending_telegram_user = first_name
+            self._pending_telegram_chat_id = chat_id
+            self._pending_telegram_time = time.time()
+            self._pending_telegram_action = "lockdown_off"
+            self.write_serial("lockdown 0")
+            msg = (
+                f"🟢 <b>Emergency Lockdown Cleared</b> (by {first_name})\n\n"
+                f"• <b>Door State:</b> <code>LOCKED</code>\n"
+                f"• <b>Physical Access:</b> Restored (PIN & Badges enabled)\n"
+                f"• <b>Perimeter:</b> Secure"
+            )
+            # Broadcast to all admins
+            self.send_telegram_message(msg)
+
+        elif cmd in ("/ack", "/reset"):
+            cur = self._get_current_vault_state()
+            print(f"{self._ts()} [TELEGRAM] Remote ACK requested by {first_name} ({chat_id})")
+            self._pending_telegram_user = first_name
+            self._pending_telegram_chat_id = chat_id
+            self._pending_telegram_time = time.time()
+            self._pending_telegram_action = "ack"
+            self.write_serial("ack")
+            if cur["breach"] or self.last_breach_state:
+                self.notify_telegram_breach_cleared(source=f"Telegram ({first_name})")
+            else:
+                msg = (
+                    f"✅ <b>Perimeter Status Normal</b> (by {first_name})\n\n"
+                    f"• <b>Alarm Siren:</b> Inactive / Normal\n"
+                    f"• <b>Door State:</b> <code>{cur['state']}</code>\n"
+                    f"• <i>No pending breach alert was active.</i>"
+                )
+                self.send_telegram_message(msg, target_chat_id=chat_id)
+
+        else:
+            clean_input = text.strip()
+            if len(clean_input) > 25:
+                clean_input = clean_input[:25] + "..."
+            msg = (
+                f"❓ <b>Unknown Command:</b> <code>{clean_input}</code>\n\n"
+                f"I didn't recognize that instruction, <b>{first_name}</b>.\n"
+                f"👉 Tap /help to view all available commands."
+            )
+            self.send_telegram_message(msg, target_chat_id=chat_id)
 
     def _ts(self):
         """Returns current local time formatted as [HH:MM:SS]."""
@@ -350,6 +644,9 @@ class SmartSafeGateway:
 
         if self.mock_mode:
             if command_clean == "unlock":
+                if self.mock_state.get("lockdown"):
+                    self.process_incoming_line('{"type":"event","event":"lockdown_blocked"}')
+                    return
                 self.mock_state["state"] = "UNLOCKED"
                 self.process_incoming_line('{"type":"event","source":"system","action":"unlock","state":"UNLOCKED"}')
             elif command_clean == "lock":
@@ -358,11 +655,11 @@ class SmartSafeGateway:
             elif command_clean in ("ack", "reset"):
                 self.mock_state["breach"] = False
                 self.process_incoming_line('{"type":"event","event":"breach_acknowledged"}')
-            elif command_clean == "lockdown 1":
+            elif command_clean in ("lockdown 1", "lockdown on"):
                 self.mock_state["lockdown"] = True
                 self.mock_state["state"] = "LOCKED"
                 self.process_incoming_line('{"type":"event","event":"lockdown_enabled"}')
-            elif command_clean == "lockdown 0":
+            elif command_clean in ("lockdown 0", "lockdown off"):
                 self.mock_state["lockdown"] = False
                 self.process_incoming_line('{"type":"event","event":"lockdown_disabled"}')
             return
@@ -831,6 +1128,13 @@ class SmartSafeGateway:
             elif (event_name == "access" and obj.get("status") == "granted") or (not event_name and source == "system" and action == "unlock"):
                 if (time.time() - self._last_unlock_event_time) < 2.0:
                     is_significant = False
+                elif (time.time() - self._pending_telegram_time) < 3.0 and self._pending_telegram_action == "unlock":
+                    user_tag = self._pending_telegram_user or "Telegram"
+                    event_desc = f"Door Unlocked (Telegram by {user_tag})"
+                    audit_state = "UNLOCKED"
+                    self.last_known_state = "UNLOCKED"
+                    self._last_unlock_event_time = time.time()
+                    log_category = "ACCESS"
                 elif (time.time() - self._pending_operator_unlock) < 2.5:
                     event_desc = "Door Unlocked (Web / Cloud)"
                     audit_state = "UNLOCKED"
@@ -847,7 +1151,10 @@ class SmartSafeGateway:
                     is_significant = False
 
             elif source == "system" and action == "manual_lock":
-                if (time.time() - self._pending_operator_lock) < 2.5:
+                if (time.time() - self._pending_telegram_time) < 3.0 and self._pending_telegram_action == "lock":
+                    user_tag = self._pending_telegram_user or "Telegram"
+                    event_desc = f"Door Locked (Telegram by {user_tag})"
+                elif (time.time() - self._pending_operator_lock) < 2.5:
                     event_desc = "Door Locked (Web / Cloud)"
                 else:
                     event_desc = "Door Locked (USB CLI)"
@@ -875,7 +1182,11 @@ class SmartSafeGateway:
                     self._telegram_breach_notified = True
 
             elif event_name == "breach_acknowledged":
-                if (time.time() - self._pending_operator_ack) < 2.5:
+                if (time.time() - self._pending_telegram_time) < 3.0 and self._pending_telegram_action == "ack":
+                    user_tag = self._pending_telegram_user or "Telegram"
+                    event_desc = f"Breach Alarm Acknowledged (Telegram by {user_tag})"
+                    ack_source = f"Telegram ({user_tag})"
+                elif (time.time() - self._pending_operator_ack) < 2.5:
                     event_desc = "Breach Alarm Acknowledged (Web / Cloud)"
                     ack_source = "Web / Cloud Dashboard"
                 else:
@@ -892,6 +1203,12 @@ class SmartSafeGateway:
                 # Suppress if triggered within 2.0s of bruteforce alarm (bruteforce already logged the incident)
                 if (time.time() - self._last_bruteforce_time) < 2.0:
                     is_significant = False
+                elif (time.time() - self._pending_telegram_time) < 3.0 and self._pending_telegram_action == "lockdown_on":
+                    user_tag = self._pending_telegram_user or "Telegram"
+                    event_desc = f"Emergency Lockdown Armed (Telegram by {user_tag})"
+                    audit_state = "LOCKED"
+                    self.last_known_state = "LOCKED"
+                    log_category = "LOCKDOWN"
                 elif (time.time() - self._pending_operator_lockdown) < 2.5:
                     event_desc = "Emergency Lockdown Armed (Web / Cloud)"
                     audit_state = "LOCKED"
@@ -904,7 +1221,10 @@ class SmartSafeGateway:
                     log_category = "LOCKDOWN"
 
             elif event_name == "lockdown_disabled":
-                if (time.time() - self._pending_operator_lockdown) < 2.5:
+                if (time.time() - self._pending_telegram_time) < 3.0 and self._pending_telegram_action == "lockdown_off":
+                    user_tag = self._pending_telegram_user or "Telegram"
+                    event_desc = f"Emergency Lockdown Cleared (Telegram by {user_tag})"
+                elif (time.time() - self._pending_operator_lockdown) < 2.5:
                     event_desc = "Emergency Lockdown Cleared (Web / Cloud)"
                 else:
                     event_desc = "Emergency Lockdown Cleared"
@@ -913,7 +1233,18 @@ class SmartSafeGateway:
                 log_category = "SECURITY"
 
             elif event_name == "lockdown_blocked":
-                if (time.time() - self._pending_operator_unlock) < 2.5:
+                if (time.time() - self._pending_telegram_time) < 3.0 and self._pending_telegram_action == "unlock":
+                    user_tag = self._pending_telegram_user or "Telegram"
+                    event_desc = f"Unlock Denied: System in Lockdown (Telegram by {user_tag})"
+                    target_cid = getattr(self, '_pending_telegram_chat_id', None)
+                    if target_cid:
+                        self.send_telegram_message(
+                            f"⛔ <b>Unlock Denied</b>: Vault is in Emergency Lockdown!\n\n"
+                            f"Hardware rejected unlock command by <b>{user_tag}</b>.\n"
+                            f"Use /unlockdown to clear lockdown first.",
+                            target_chat_id=target_cid
+                        )
+                elif (time.time() - self._pending_operator_unlock) < 2.5:
                     event_desc = "Unlock Denied: System in Lockdown (Web / Cloud)"
                 else:
                     event_desc = "Unlock Denied: System in Lockdown"
@@ -1028,7 +1359,9 @@ class SmartSafeGateway:
         else:
             print("CoreIOT Cloud Mirror    : DISABLED (Set COREIOT_TOKEN in .env to mirror to HCMUT CoreIOT)")
         if self.telegram_enabled:
-            print(f"Telegram Bot Alert      : \033[92mENABLED\033[0m (Chat ID: {self.telegram_chat_id})")
+            chat_list_str = ", ".join(self.telegram_chat_ids)
+            print(f"Telegram Bot Alert      : \033[92mENABLED\033[0m (Chat IDs: {chat_list_str})")
+            self.start_telegram_listener()
         else:
             print("Telegram Bot Alert      : DISABLED (Configure TELEGRAM_TOKEN and TELEGRAM_CHAT_ID in .env)")
 

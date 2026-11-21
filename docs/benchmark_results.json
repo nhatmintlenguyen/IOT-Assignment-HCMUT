@@ -1,4 +1,5 @@
 {
+  "test_mode": "mock",
   "table_4_1_rows": [
     [
       "1",
@@ -31,8 +32,8 @@
       "4",
       "AI inference latency (ms)",
       "1000",
-      "8.50",
-      "5.98 / 24.98",
+      "9.52",
+      "6.75 / 19.16",
       "< 10 ms",
       "PASS"
     ],
@@ -49,8 +50,8 @@
       "6",
       "Telegram alert delivery latency (ms)",
       "10",
-      "247.1",
-      "173.1 / 333.8",
+      "606.7",
+      "565.7 / 670.7",
       "< 1500 ms",
       "PASS"
     ]
@@ -69,30 +70,23 @@
       "recall_pct": 83.4,
       "f1_score_pct": 90.95,
       "specificity_pct": 100.0,
-      "latency_mean_ms": 8.5,
-      "latency_min_ms": 5.98,
-      "latency_max_ms": 24.98,
-      "latency_p95_ms": 13.86,
-      "latency_p99_ms": 16.93
+      "latency_mean_ms": 9.52,
+      "latency_min_ms": 6.75,
+      "latency_max_ms": 19.16,
+      "latency_p95_ms": 13.52
     },
     "gateway_pipeline": {
       "n_trials": 1000,
-      "mean_ms": 8.632,
-      "min_ms": 6.326,
-      "max_ms": 23.723,
-      "throughput_fps": 115.8
-    },
-    "rpc_latency": {
-      "n_trials": 200,
-      "mean_ms": 8.36,
-      "min_ms": 4.89,
-      "max_ms": 14.87
+      "mean_ms": 10.941,
+      "min_ms": 7.327,
+      "max_ms": 21.649,
+      "throughput_fps": 91.4
     },
     "telegram_alert": {
-      "n_trials": 10,
-      "mean_ms": 247.1,
-      "min_ms": 173.1,
-      "max_ms": 333.8
+      "n_trials": 5,
+      "mean_ms": 606.7,
+      "min_ms": 565.7,
+      "max_ms": 670.7
     },
     "esp_now": {
       "n_packets": 1000,

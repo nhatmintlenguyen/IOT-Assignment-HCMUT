@@ -218,8 +218,25 @@ Every interaction on the safe triggers a high-visibility, 1.2-second LCD status 
 * **Remote Cloud Actions**: `WEB / CLOUD / Access Granted`, `WEB / CLOUD / Vault Locked`, `WEB / CLOUD / Breach Acked`, `WEB / CLOUD / Lockdown ON/OFF`.
 
 ### 4.5 Edge AI Anomaly Detection (`T09`)
-* The Gateway runs a Python background thread analyzing sliding windows of telemetry (access hour, failed PIN attempts, temperature variations).
-* An **Isolation Forest** model evaluates the multi-variable vector. If an unexpected combination is detected (e.g., repeated access attempts at 3:00 AM combined with abnormal temperature rises), the script pushes an `anomaly_score` to CoreIOT and flags an early-warning event.
+The Gateway executes an **Isolation Forest** machine learning model (`scikit-learn`) on every incoming telemetry frame to detect physical tampering, environmental attacks, and anomalous access vectors in real time.
+
+* **Mathematical Principle**: Isolation Forest builds 100 randomized decision trees (`n_estimators=100`, `contamination=0.02`). Anomalous multi-variable vectors are structurally isolated near the root of the trees (short average path length $h(x)$), whereas nominal operating states require deep partition splits.
+* **7-Dimensional Input Vector ($X$)**:
+  1. `hour` (0–23): Time of day (flags unauthorized nocturnal access attempts).
+  2. `temp` (°C): Ambient DHT20 temperature.
+  3. `hum` (%): Ambient DHT20 relative humidity.
+  4. `is_unlocked` (0 = `LOCKED`, 1 = `UNLOCKED`): Binary physical door lock state.
+  5. `light_adc` (0–4095): Internal optical enclosure sensor (LDR).
+  6. `distance_cm` (cm): Ultrasonic proximity radar (HC-SR04).
+  7. `is_breach` (0/1): Hardware tamper alarm flag.
+* **Feature Normalization**: Centered and scaled via `StandardScaler()` so high-magnitude readings (e.g. ADC 0–4095) do not skew continuous temperature or distance values.
+* **Domain Security Rules & Penalties**:
+  - **Optical Drill Breach**: Internal light detected ($> 700$ ADC) while door is locked ($+0.80$ penalty).
+  - **Thermal Attack Vector**: High heat torch ($T > 36^\circ\text{C}$) or cryogenic liquid nitrogen tamper ($T < 14^\circ\text{C}$).
+  - **Moisture Flooding**: Humidity exceeds $85\%$.
+* **Scoring & Real-Time Output**: Computes a continuous normalized score ($[0.0, 1.0]$) streamed to ThingsBoard. If $\text{score} \ge 0.50$, an anomaly alert is raised with structured diagnosis (`anomaly_reason`).
+* **Empirical Performance**: **96.68% accuracy**, 100.00% precision (0 false alarms on normal baseline), **9.52 ms** edge inference latency (measured over 1,000 trials).
+* **Real-World Calibration Protocol**: Features a zero-shot synthetic baseline for immediate cold-start operation; can be re-fitted on real sensor CSV telemetry (`.joblib` persistence) to adapt to laboratory ambient temperature and the physical light-tightness of the safe enclosure.
 
 ### 4.6 Dual Cloud / Offline Redundancy (`N07`)
 * The Gateway Python application publishes MQTT packets simultaneously to:
@@ -407,6 +424,46 @@ make benchmark ARGS="--live"
 gateway/.venv/bin/python scripts/system_benchmark.py --live --port /dev/ttyACM0
 ```
 All measurement results are printed in a clean ASCII table and automatically saved to `docs/benchmark_results.json` for inclusion in the final report.
+
+---
+
+### 8.6 Interactive Telegram Security & Remote Control Bot (T13)
+
+The IoT Gateway integrates an asynchronous, bidirectional Telegram bot daemon connecting administrators directly to the vault perimeter.
+
+* **Official Bot Handle:** [@hcmut_iot_bot](https://t.me/hcmut_iot_bot)
+* **Configuration (`.env`):**
+  ```ini
+  TELEGRAM_TOKEN=your_bot_token_from_botfather
+  TELEGRAM_CHAT_ID=1979409784,1252255798  # Comma-separated list for multi-administrator access
+  ```
+
+#### 1. Security & Role-Based Access Control (RBAC)
+* **Strict Whitelisting:** Only Telegram users whose Chat ID is explicitly registered in `.env` can execute control or diagnostic commands.
+* **Unauthorized Access Handling:** Any message or command sent by an unrecognized account (e.g. evaluating instructor or guest) immediately receives an access denial:
+  > `⛔ Access Denied - you're not registered as a SmartSafeGuardian Administrator`
+* **Automated Security Audit:** Every unauthorized attempt is logged to the Gateway console and recorded directly in ThingsBoard's `Access & Security Audit Log` widget with category `SECURITY`.
+
+#### 2. Interactive Admin Commands
+| Command | Action | Audit Log Trace |
+| :--- | :--- | :--- |
+| `/status` | Returns live sensor readings, lock state, breach alert, and emergency lockdown flag | — |
+| `/unlock` | Remotely commands the servo to unlock the vault door | `Door Unlocked (Telegram by <Name>)` |
+| `/lock` | Remotely commands the servo to lock the vault door | `Door Locked (Telegram by <Name>)` |
+| `/lockdown` | Arms emergency lockdown (forces door locked, ignores physical PINs and badges) | `Emergency Lockdown Armed (Telegram by <Name>)` |
+| `/unlockdown` | Disarms emergency lockdown and restores normal physical access | `Emergency Lockdown Cleared (Telegram by <Name>)` |
+| `/ack` | Acknowledges active security breach siren and silences buzzer | `Breach Alarm Acknowledged (Telegram by <Name>)` |
+| `/id` | Displays caller's Chat ID and administrator authorization status | — |
+
+#### 3. Real-Time Push Notifications
+* **Physical Tamper Breach:** Instant alert dispatched when internal LDR detects light in `LOCKED` state or ultrasonic sensor trips unauthorized movement.
+* **Resolution Clearance:** Instant confirmation dispatched when an authorized operator acknowledges the alarm via Telegram, ThingsBoard dashboard, IR remote, or physical badge.
+
+#### 4. Instant Connectivity Test
+Verify Telegram bot credentials and end-to-end delivery across all registered administrators:
+```bash
+gateway/.venv/bin/python gateway/gateway.py --test-telegram
+```
 
 
 
