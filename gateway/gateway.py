@@ -114,7 +114,8 @@ def discover_thingsboard_server(beacon_port=50051, timeout=5.0):
 class SmartSafeGateway:
     def __init__(self, tb_host, tb_port, tb_token, serial_port, baudrate, mock=False, gw_token=None,
                  beacon_port=50051, fallback_host="127.0.0.1", debug=False,
-                 telegram_token=None, telegram_chat_id=None, disable_telegram=False):
+                 telegram_token=None, telegram_chat_id=None, disable_telegram=False,
+                 web_port=5000, disable_web=False):
         self.raw_tb_host = tb_host
         self.tb_host = tb_host
         self.tb_port = tb_port
@@ -127,6 +128,12 @@ class SmartSafeGateway:
         self.baudrate = baudrate
         self.mock_mode = mock
         self.debug_mode = debug
+        self.web_port = int(web_port or os.getenv("LOCAL_WEB_PORT", "5000"))
+        self.enable_web = not disable_web
+        self.web_server = None
+        self.last_anomaly_score = 0.0
+        self.last_anomaly = False
+        self.last_anomaly_reason = ""
 
         # Telegram Intrusion Notification Configuration (T13)
         self.telegram_token = (telegram_token or os.getenv("TELEGRAM_TOKEN", "")).strip()
@@ -896,9 +903,35 @@ class SmartSafeGateway:
             is_anomaly, anomaly_score, reason = self.detector.evaluate(obj)
             obj["anomaly"] = is_anomaly
             obj["anomaly_score"] = anomaly_score
+            self.last_anomaly = is_anomaly
+            self.last_anomaly_score = anomaly_score
+            self.last_anomaly_reason = reason if is_anomaly else ""
             # Only include anomaly_reason when an anomaly is actually active
             if is_anomaly:
                 obj["anomaly_reason"] = reason
+
+            # Broadcast live telemetry update to local Web UI (T10)
+            if self.enable_web:
+                try:
+                    from web_server import broadcast_sse
+                    broadcast_sse({
+                        "type": "status",
+                        "data": {
+                            "state": obj.get("state", self.last_known_state or "LOCKED"),
+                            "breach": bool(obj.get("breach", False)),
+                            "lockdown": bool(obj.get("lockdown", False)),
+                            "light": obj.get("light_adc", 0),
+                            "temp": obj.get("temp", "N/A"),
+                            "hum": obj.get("hum", "N/A"),
+                            "dist": obj.get("distance_cm", "N/A"),
+                            "anomaly_score": anomaly_score,
+                            "anomaly": is_anomaly,
+                            "anomaly_reason": reason if is_anomaly else "",
+                            "last_badge": obj.get("last_badge", "Authorized Badge")
+                        }
+                    })
+                except Exception:
+                    pass
 
             payload = json.dumps(obj)
             self._publish_mqtt("v1/devices/me/telemetry", payload)
@@ -1345,6 +1378,14 @@ class SmartSafeGateway:
 
     def run(self):
         """Main gateway execution lifecycle."""
+        # Start Local Embedded Operator Web UI (T10) immediately so it is available with zero wait
+        if self.enable_web:
+            try:
+                from web_server import start_local_web_server
+                self.web_server, _ = start_local_web_server(self, port=self.web_port)
+            except Exception as e:
+                print(f"[LOCAL WEB T10] Could not start local operator console: {e}")
+
         print("=========================================================")
         print("    Smart Safe Guardian - IoT Gateway Daemon (T08/T15)   ")
         print("=========================================================")
@@ -1454,6 +1495,10 @@ def main():
                         help="Disable Telegram intrusion alerts even if tokens are configured")
     parser.add_argument("--test-telegram", action="store_true",
                         help="Send a test notification to Telegram to verify bot connectivity and exit")
+    parser.add_argument("--web-port", type=int, default=int(os.getenv("LOCAL_WEB_PORT", "5000")),
+                        help="Local operator web console port (T10) (default: 5000)")
+    parser.add_argument("--disable-web", action="store_true",
+                        help="Disable local operator web console (T10)")
 
     args = parser.parse_args()
 
@@ -1470,7 +1515,9 @@ def main():
         debug=args.debug,
         telegram_token=args.telegram_token,
         telegram_chat_id=args.telegram_chat_id,
-        disable_telegram=args.disable_telegram
+        disable_telegram=args.disable_telegram,
+        web_port=args.web_port,
+        disable_web=args.disable_web
     )
 
     if args.test_telegram:
