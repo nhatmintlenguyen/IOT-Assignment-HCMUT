@@ -25,15 +25,10 @@ volatile uint32_t pairingWindowUntilMs = 0;
 
 void load_paired_badge() {
     authPrefs.begin("vault_auth", false);
-    hasAuthorizedBadge = authPrefs.getBool("has_badge", false);
-    if (hasAuthorizedBadge) {
-        authPrefs.getBytes("badge_mac", authorizedBadgeMac, 6);
-        Serial.printf("[AUTH] Authorized Badge MAC loaded from NVS: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                      authorizedBadgeMac[0], authorizedBadgeMac[1], authorizedBadgeMac[2],
-                      authorizedBadgeMac[3], authorizedBadgeMac[4], authorizedBadgeMac[5]);
-    } else {
-        Serial.println("[AUTH] No Badge paired yet. Press BOOT button or IR Key 'E' to pair.");
-    }
+    authPrefs.clear(); // Ephemeral security: wipe NVS on boot so pairing is required on every startup
+    hasAuthorizedBadge = false;
+    memset(authorizedBadgeMac, 0, 6);
+    Serial.println("[AUTH] Fresh Startup: Authorized badge cache cleared. Press BOOT button or IR Key 'E' to pair.");
 }
 
 void start_pairing_mode() {
@@ -112,8 +107,27 @@ void onDataRecv(const uint8_t *srcMac, const uint8_t *data, int len) {
         }
 
         // --- 2. SECURITY WHITELIST CHECK ---
-        // If a badge has been paired and incoming MAC doesn't match -> Rogue Badge!
-        if (hasAuthorizedBadge && memcmp(srcMac, authorizedBadgeMac, 6) != 0) {
+        // Zero-Trust Rule A: If no badge has been paired yet, reject any command!
+        if (!hasAuthorizedBadge) {
+            Serial.printf("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"%s\",\"result\":\"denied_unpaired\",\"alert\":\"NO_BADGE_PAIRED\",\"mac\":\"%02X:%02X:%02X:%02X:%02X:%02X\"}\n",
+                          req.cmd, srcMac[0], srcMac[1], srcMac[2], srcMac[3], srcMac[4], srcMac[5]);
+            record_failed_attempt("badge_espnow");
+            strcpy(resp.status, "DENIED_UNAUTHORIZED");
+            lcd_show_notification("NOT PAIRED", "Pair badge first");
+
+            if (!esp_now_is_peer_exist(srcMac)) {
+                esp_now_peer_info_t peer = {};
+                memcpy(peer.peer_addr, srcMac, 6);
+                peer.channel = 1;
+                peer.encrypt = false;
+                esp_now_add_peer(&peer);
+            }
+            esp_now_send(srcMac, (uint8_t *)&resp, sizeof(resp));
+            return;
+        }
+
+        // Zero-Trust Rule B: If a badge is paired and incoming MAC does not match -> Rogue Badge!
+        if (memcmp(srcMac, authorizedBadgeMac, 6) != 0) {
             Serial.printf("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"%s\",\"result\":\"denied_unauthorized\",\"alert\":\"ROGUE_BADGE_DETECTED\",\"rogue_mac\":\"%02X:%02X:%02X:%02X:%02X:%02X\"}\n",
                           req.cmd, srcMac[0], srcMac[1], srcMac[2], srcMac[3], srcMac[4], srcMac[5]);
             record_failed_attempt("badge_espnow");

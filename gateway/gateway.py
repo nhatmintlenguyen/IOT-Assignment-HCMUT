@@ -1078,7 +1078,16 @@ class SmartSafeGateway:
 
             # Case A: ESP-NOW Badge events
             elif source in ("badge_espnow", "badge"):
-                if obj.get("alert") == "ROGUE_BADGE_DETECTED" or cmd == "FAKE_BADGE" or result == "denied_unauthorized":
+                if obj.get("alert") == "NO_BADGE_PAIRED" or result == "denied_unpaired":
+                    badge_mac = obj.get("mac", "")
+                    mac_info = f" ({badge_mac})" if badge_mac else ""
+                    event_desc = f"Badge Denied: No Badge Paired{mac_info}"
+                    audit_state = "LOCKED"
+                    self._last_rogue_badge_time = time.time()
+                    self.mock_state["last_badge"] = "UNPAIRED BADGE (DENIED)"
+                    self.mock_state["espnow_link"] = "ACTIVE (Unpaired RX)"
+                    log_category = "SECURITY"
+                elif obj.get("alert") == "ROGUE_BADGE_DETECTED" or cmd == "FAKE_BADGE" or result == "denied_unauthorized":
                     rogue_mac = obj.get("rogue_mac", "")
                     mac_info = f" ({rogue_mac})" if rogue_mac else ""
                     event_desc = f"Rogue Badge Rejected{mac_info}"

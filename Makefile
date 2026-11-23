@@ -10,13 +10,35 @@ LOAD_DEMO ?= false
 # PlatformIO binary detection
 PIO := $(shell which pio 2>/dev/null || which platformio 2>/dev/null || (test -x $(HOME)/.platformio/penv/bin/pio && echo $(HOME)/.platformio/penv/bin/pio) || (test -x $(HOME)/.local/bin/pio && echo $(HOME)/.local/bin/pio))
 
-# Automatic port discovery
-DETECTED_VAULT_PORT := $(shell ls /dev/ttyACM* 2>/dev/null | head -n 1)
-DETECTED_BADGE_PORT := $(shell ls /dev/ttyUSB* 2>/dev/null | head -n 1)
+# Automatic port discovery via /dev/serial/by-id or fallback to ttyACM/ttyUSB
+DETECTED_VAULT_PORT := $(shell \
+	if [ -d /dev/serial/by-id ]; then \
+		vault_id=$$(ls /dev/serial/by-id/ 2>/dev/null | grep -iE "espressif|jtag|acm" | head -n 1); \
+		if [ -n "$$vault_id" ]; then readlink -f /dev/serial/by-id/$$vault_id; exit 0; fi; \
+	fi; \
+	ls /dev/ttyACM* 2>/dev/null | head -n 1 \
+)
 
-# Allow manual override via PORT=/dev/...
-VAULT_PORT ?= $(if $(PORT),$(PORT),$(DETECTED_VAULT_PORT))
-BADGE_PORT ?= $(if $(PORT),$(PORT),$(DETECTED_BADGE_PORT))
+DETECTED_BADGE_PORT := $(shell \
+	if [ -d /dev/serial/by-id ]; then \
+		badge_id=$$(ls /dev/serial/by-id/ 2>/dev/null | grep -iE "1a86|ch34|cp21|usb_serial|ftdi" | head -n 1); \
+		if [ -n "$$badge_id" ]; then readlink -f /dev/serial/by-id/$$badge_id; exit 0; fi; \
+	fi; \
+	ls /dev/ttyUSB* 2>/dev/null | head -n 1 \
+)
+
+# Allow manual override via PORT=/dev/... or auto-resolve if set to 'auto' or empty
+ifeq ($(filter-out auto,$(VAULT_PORT)),)
+  VAULT_PORT := $(if $(PORT),$(PORT),$(DETECTED_VAULT_PORT))
+else
+  VAULT_PORT := $(if $(PORT),$(PORT),$(VAULT_PORT))
+endif
+
+ifeq ($(filter-out auto,$(BADGE_PORT)),)
+  BADGE_PORT := $(if $(PORT),$(PORT),$(DETECTED_BADGE_PORT))
+else
+  BADGE_PORT := $(if $(PORT),$(PORT),$(BADGE_PORT))
+endif
 
 # Detect if 'monitor' is requested in the command line (e.g. make flash-vault monitor)
 MONITOR_REQUESTED := $(if $(filter monitor,$(MAKECMDGOALS)),1,$(if $(MONITOR),1,0))

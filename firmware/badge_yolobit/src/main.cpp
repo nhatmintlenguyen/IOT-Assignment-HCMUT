@@ -24,16 +24,10 @@ bool isVaultPaired = false;
 
 void load_paired_vault() {
     badgePrefs.begin("badge_auth", false);
-    isVaultPaired = badgePrefs.getBool("is_paired", false);
-    if (isVaultPaired) {
-        badgePrefs.getBytes("vault_mac", vaultMacAddress, 6);
-        Serial.printf("[AUTH] Paired YoloUNO MAC loaded from NVS: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                      vaultMacAddress[0], vaultMacAddress[1], vaultMacAddress[2],
-                      vaultMacAddress[3], vaultMacAddress[4], vaultMacAddress[5]);
-    } else {
-        memcpy(vaultMacAddress, BROADCAST_MAC, 6);
-        Serial.println("[AUTH] No YoloUNO paired yet. Hold A+B for 1.5s in Pairing Mode.");
-    }
+    badgePrefs.clear(); // Ephemeral security: wipe NVS on boot so pairing is required on every startup
+    isVaultPaired = false;
+    memcpy(vaultMacAddress, BROADCAST_MAC, 6);
+    Serial.println("[AUTH] Fresh Startup: Pairing cache cleared. Hold A+B (1.5s) to pair with YoloUNO.");
 }
 
 // Bidirectional message structures
