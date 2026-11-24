@@ -24,7 +24,7 @@ uint32_t get_remaining_unlock_time_sec();
 
 // Breach management
 void trigger_breach();
-void acknowledge_breach();
+void acknowledge_breach(const char* source = nullptr);
 
 // Lockdown management
 void set_lockdown(bool active);

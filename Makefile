@@ -189,15 +189,23 @@ beacon-stop: ## Stop background ThingsBoard UDP discovery beacon
 
 setup-rpi-service: ## Install and enable systemd gateway and 5-min auto-update timer on Raspberry Pi
 	@echo "[INFO] Installing systemd gateway service and auto-update timer..."
-	sed "s|%h|$$HOME|g" scripts/smart-safe-gateway.service | sudo tee /etc/systemd/system/smart-safe-gateway.service >/dev/null
-	sed "s|%h|$$HOME|g" scripts/smart-safe-autoupdate.service | sudo tee /etc/systemd/system/smart-safe-autoupdate.service >/dev/null
+	@chmod +x scripts/*.sh
+	@REAL_USER=$$(id -un); \
+	REPO_PATH="$$(pwd)"; \
+	sed -e "s|%REPO_DIR%|$$REPO_PATH|g" -e "s|%USER%|$$REAL_USER|g" -e "s|%h|$$HOME|g" scripts/smart-safe-gateway.service | sudo tee /etc/systemd/system/smart-safe-gateway.service >/dev/null; \
+	sed -e "s|%REPO_DIR%|$$REPO_PATH|g" -e "s|%USER%|$$REAL_USER|g" -e "s|%h|$$HOME|g" scripts/smart-safe-autoupdate.service | sudo tee /etc/systemd/system/smart-safe-autoupdate.service >/dev/null
 	sudo cp scripts/smart-safe-autoupdate.timer /etc/systemd/system/smart-safe-autoupdate.timer
 	sudo systemctl daemon-reload
 	sudo systemctl enable --now smart-safe-gateway.service
 	sudo systemctl enable --now smart-safe-autoupdate.timer
-	@echo "\033[92m[SUCCESS] Gateway and 5-min auto-update timer successfully installed!\033[0m"
-	@echo "Check gateway status : sudo systemctl status smart-safe-gateway.service"
-	@echo "Check timer status   : sudo systemctl list-timers | grep smart-safe"
+	@echo "\033[92m[SUCCESS] Gateway daemon and 5-min auto-update timer installed and active!\033[0m"
+	@echo "--------------------------------------------------------"
+	@echo "• The gateway is now running in the BACKGROUND as a systemd service."
+	@echo "• View live logs : \033[96mjournalctl -u smart-safe-gateway.service -f\033[0m"
+	@echo "• Check status   : \033[96msudo systemctl status smart-safe-gateway.service\033[0m"
+	@echo "• Stop service   : \033[96msudo systemctl stop smart-safe-gateway.service\033[0m"
+	@echo "• Restart service: \033[96msudo systemctl restart smart-safe-gateway.service\033[0m"
+	@echo "--------------------------------------------------------"
 
 env: ## Create .env from .env.example if missing
 	@test -f .env || (cp .env.example .env && echo ".env created")

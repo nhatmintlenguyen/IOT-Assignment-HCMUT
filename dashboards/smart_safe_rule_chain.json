@@ -211,7 +211,7 @@
         "queueName": null,
         "configurationVersion": 0,
         "configuration": {
-          "jsScript": "var isBreach = msg.breach === true;\nvar isLightBreach = (msg.state === 'LOCKED' || msg.state === undefined) && msg.light_adc > 500;\nvar isAiAnomaly = msg.anomaly_score !== undefined && Number(msg.anomaly_score) >= 0.50;\nvar isThermalAttack = msg.temp !== undefined && Number(msg.temp) > 36.0;\n\nreturn isBreach || isLightBreach || isAiAnomaly || isThermalAttack;"
+          "jsScript": "var isBreach = msg.breach === true;\nvar isLightBreach = (msg.state === 'LOCKED' || msg.state === undefined) && msg.light_adc > 500;\nvar isAiAnomaly = msg.anomaly_score !== undefined && Number(msg.anomaly_score) >= 0.50;\nvar isThermalAttack = msg.temp !== undefined && Number(msg.temp) > 35.0;\n\nreturn isBreach || isLightBreach || isAiAnomaly || isThermalAttack;"
         },
         "externalId": null,
         "additionalInfo": {

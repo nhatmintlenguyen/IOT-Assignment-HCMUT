@@ -699,6 +699,15 @@ def make_handler(gateway_instance, log_tee):
 
                 if cmd:
                     print(f"[LOCAL WEB T10] Operator command received: '{cmd}'")
+                    if cmd == "ack" or cmd.startswith("ack"):
+                        gateway_instance._pending_operator_ack = time.time()
+                    elif cmd == "unlock":
+                        gateway_instance._pending_operator_unlock = time.time()
+                    elif cmd == "lock":
+                        gateway_instance._pending_operator_lock = time.time()
+                    elif cmd.startswith("lockdown"):
+                        gateway_instance._pending_operator_lockdown = time.time()
+
                     gateway_instance.write_serial(cmd)
                     # Push instant status update to all connected browsers
                     st = gateway_instance._get_current_vault_state()

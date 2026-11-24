@@ -161,7 +161,18 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
 
     // --- ABSOLUTE PRIORITIES ---
 
-    // 0. Active Secure Pairing Window (Prioritaire sur Welcome et toutes les pages)
+    // 0. Security breach alert (ABSOLUTE TOP PRIORITY: Enclosure intrusion overrides everything)
+    if (status.breachActive) {
+        print_padded_line(0, "SECURITY BREACH");
+        if (status.lockdownActive) {
+            print_padded_line(1, "IN LOCKDOWN!");
+        } else {
+            print_padded_line(1, "Waiting for ACK");
+        }
+        return;
+    }
+
+    // 1. Active Secure Pairing Window (Prioritaire sur Welcome et toutes les pages)
     if (is_pairing_mode_active()) {
         char line1[17];
         snprintf(line1, sizeof(line1), "Hold A+B | %2lus", (unsigned long)get_remaining_pairing_sec());
@@ -170,7 +181,7 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
         return;
     }
 
-    // 1. Remote security lockdown from ThingsBoard / Supervisor
+    // 2. Remote security lockdown from ThingsBoard / Supervisor
     if (status.lockdownActive) {
         print_padded_line(0, "VAULT LOCKDOWN");
         print_padded_line(1, "Access Disabled");
@@ -233,12 +244,6 @@ void lcd_display_update(const SensorSnapshot& sensors, const VaultStatus& status
         return;
     }
 
-    // 6. Security breach alert (affiché si aucune saisie PIN en cours)
-    if (status.breachActive) {
-        print_padded_line(0, "SECURITY BREACH");
-        print_padded_line(1, "Waiting for ACK");
-        return;
-    }
 
     // 7. Active vault unlocked state (live countdown + manual lock reminder)
     if (status.lockState == LockState::Unlocked) {

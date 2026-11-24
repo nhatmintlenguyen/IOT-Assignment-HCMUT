@@ -167,6 +167,7 @@ class SmartSafeGateway:
         self._last_lock_event_time = 0
         self._last_rogue_badge_time = 0
         self._last_bruteforce_time = 0
+        self._last_breach_ack_time = 0
         self._pending_operator_unlock = 0
         self._pending_operator_lock = 0
         self._pending_operator_ack = 0
@@ -178,8 +179,14 @@ class SmartSafeGateway:
         self._recent_events = {}
         self.running = True
         self.last_breach_state = False
+        self.last_lockdown_state = False
         self.last_known_state = None
+        self.last_telemetry = {}
         self.detector = VaultAnomalyDetector()
+        self._telegram_startup_notified = False
+        self._telegram_bruteforce_notified = False
+        self._connection_start_time = time.time()
+        self.actual_serial_port = None
 
         # Simulated mock state
         self.mock_state = {
@@ -233,21 +240,59 @@ class SmartSafeGateway:
         t = threading.Thread(target=_worker, name="telegram-alert-worker", daemon=True)
         t.start()
 
+    def notify_telegram_startup(self):
+        """Sends a single professional initialization message to Telegram when Gateway and Vault are online."""
+        if self._telegram_startup_notified or not self.telegram_enabled:
+            return
+        self._telegram_startup_notified = True
+
+        now_str = time.strftime("%Y-%m-%d %H:%M:%S")
+        port_label = getattr(self, "actual_serial_port", None) or self.serial_port_name or "/dev/ttyACM0"
+
+        msg = (
+            "🛡️ <b>SMART SAFE GUARDIAN - SYSTEM ONLINE</b> 🛡️\n\n"
+            "✅ <b>Status:</b> Gateway & Vault Operational\n"
+            f"🔌 <b>Controller:</b> YoloUNO S3 detected (<code>{port_label}</code>)\n"
+            "📡 <b>Wireless Link:</b> ESP-NOW Active (Channel 1)\n"
+            "🔔 <b>Security Alerts:</b> Armed & Monitoring\n\n"
+            f"⏰ <i>{now_str}</i> | Tap /status for live telemetry or /help"
+        )
+        self.send_telegram_message(msg, parse_mode="HTML")
+
     def notify_telegram_breach(self, telemetry):
         """Dispatches a formatted physical breach alert to Telegram."""
         now_str = time.strftime("%Y-%m-%d %H:%M:%S")
         light_val = telemetry.get("light_adc", "N/A")
         temp_val = telemetry.get("temp", "N/A")
-        state_val = telemetry.get("state", self.last_known_state or "LOCKED")
+        raw_state = telemetry.get("state", self.last_known_state or "LOCKED")
+        is_lockdown = self.last_lockdown_state or bool(telemetry.get("lockdown", False))
+        state_val = f"{raw_state} (EMERGENCY LOCKDOWN ACTIVE)" if is_lockdown else raw_state
+        lockdown_header = "⚠️ <b>CRITICAL: INTRUSION DETECTED UNDER LOCKDOWN!</b> ⚠️\n\n" if is_lockdown else ""
         msg = (
-            "🚨 <b>SMART SAFE GUARDIAN - SECURITY ALERT</b> 🚨\n\n"
+            f"🚨 <b>SMART SAFE GUARDIAN - SECURITY ALERT</b> 🚨\n\n"
+            f"{lockdown_header}"
             "<b>Event:</b> Physical Breach Detected!\n"
-            "<b>Status:</b> INTERNAL SENSOR TRIPPED\n"
+            "<b>Status:</b> INTERNAL SENSOR TRIPPED (ENCLOSURE COMPROMISED)\n"
             f"<b>Vault State:</b> <code>{state_val}</code>\n"
             f"<b>Light Level:</b> <code>{light_val}</code> ADC\n"
             f"<b>Temperature:</b> <code>{temp_val}</code>°C\n"
             f"<b>Timestamp:</b> <code>{now_str}</code>\n\n"
             "⚠️ <i>Immediate physical inspection required!</i>"
+        )
+        self.send_telegram_message(msg, parse_mode="HTML")
+
+    def notify_telegram_bruteforce(self, lockout_sec=60):
+        """Dispatches a dedicated Bruteforce Security Alert to Telegram."""
+        now_str = time.strftime("%Y-%m-%d %H:%M:%S")
+        msg = (
+            "🚨 <b>SMART SAFE GUARDIAN - SECURITY ALERT</b> 🚨\n\n"
+            "<b>Event:</b> Bruteforce Attack Detected!\n"
+            "<b>Status:</b> 3 CONSECUTIVE AUTHENTICATION FAILURES\n"
+            "<b>Action:</b> Emergency Lockdown Engaged\n"
+            f"<b>Lockout Duration:</b> <code>{lockout_sec}s</code>\n"
+            "<b>Vault State:</b> <code>LOCKED (LOCKDOWN)</code>\n"
+            f"<b>Timestamp:</b> <code>{now_str}</code>\n\n"
+            "🔒 <i>All keypad PINs and wearable badges temporarily blocked.</i>"
         )
         self.send_telegram_message(msg, parse_mode="HTML")
 
@@ -301,7 +346,7 @@ class SmartSafeGateway:
 
     def check_thermal_alert(self, temp_val, vault_state="LOCKED"):
         """Monitors temperature transitions (HOT / COLD / NORMAL) and fires Telegram alerts (T13)."""
-        if temp_val is None or not isinstance(temp_val, (int, float)):
+        if temp_val is None or not isinstance(temp_val, (int, float)) or temp_val <= 0.0:
             return
 
         prev_state = self._thermal_state
@@ -414,10 +459,10 @@ class SmartSafeGateway:
 
     def _get_current_vault_state(self):
         """Returns consolidated snapshot of vault state for Telegram feedback."""
-        st = self.mock_state if self.mock_mode else (getattr(self.detector, 'last_features', None) or {})
+        st = self.mock_state if self.mock_mode else (self.last_telemetry or {})
         state = st.get("state", self.last_known_state or "LOCKED")
-        lockdown = bool(st.get("lockdown", False))
-        breach = bool(st.get("breach", self.last_breach_state))
+        lockdown = bool(self.last_lockdown_state or st.get("lockdown", False))
+        breach = bool(self.last_breach_state or st.get("breach", False))
         light = st.get("light_adc", 0)
         temp = st.get("temp", "N/A")
         hum = st.get("hum", "N/A")
@@ -488,15 +533,18 @@ class SmartSafeGateway:
             cur = self._get_current_vault_state()
             breach_str = "🚨 TRIPPED" if cur["breach"] else "✅ OK (NORMAL)"
             lockdown_str = "🔴 ARMED (ALL ACCESS BLOCKED)" if cur["lockdown"] else "🟢 INACTIVE (NORMAL)"
+            temp_str = f"{cur['temp']:.1f} °C" if isinstance(cur['temp'], (int, float)) else f"{cur['temp']}"
+            hum_str = f"{cur['hum']:.1f} %" if isinstance(cur['hum'], (int, float)) else f"{cur['hum']}"
+            dist_str = f"{cur['dist']:.1f} cm" if isinstance(cur['dist'], (int, float)) else f"{cur['dist']}"
             reply = (
                 f"📊 <b>Smart Safe Guardian - Live Status</b>\n\n"
                 f"• <b>Vault State:</b> <code>{cur['state']}</code>\n"
                 f"• <b>Breach Status:</b> <code>{breach_str}</code>\n"
                 f"• <b>Emergency Lockdown:</b> <code>{lockdown_str}</code>\n"
                 f"• <b>Internal Light:</b> <code>{cur['light']}</code> ADC\n"
-                f"• <b>Temperature:</b> <code>{cur['temp']}</code> °C\n"
-                f"• <b>Humidity:</b> <code>{cur['hum']}</code> %\n"
-                f"• <b>Distance:</b> <code>{cur['dist']}</code> cm\n"
+                f"• <b>Temperature:</b> <code>{temp_str}</code>\n"
+                f"• <b>Humidity:</b> <code>{hum_str}</code>\n"
+                f"• <b>Distance:</b> <code>{dist_str}</code>\n"
                 f"• <b>Gateway Link:</b> <code>CONNECTED</code>"
             )
             self.send_telegram_message(reply, target_chat_id=chat_id)
@@ -624,9 +672,10 @@ class SmartSafeGateway:
             self._pending_telegram_time = time.time()
             self._pending_telegram_action = "ack"
             self.write_serial("ack")
-            if cur["breach"] or self.last_breach_state:
-                self.notify_telegram_breach_cleared(source=f"Telegram ({first_name})")
-            else:
+            # If no breach is active, inform the user immediately.
+            # If a breach is active, the serial hardware confirmation 'breach_acknowledged'
+            # will dispatch the single official notification with full audit attribution.
+            if not (cur["breach"] or self.last_breach_state):
                 msg = (
                     f"✅ <b>Perimeter Status Normal</b> (by {first_name})\n\n"
                     f"• <b>Alarm Siren:</b> Inactive / Normal\n"
@@ -714,6 +763,9 @@ class SmartSafeGateway:
                 self.serial_conn = serial.Serial(port, self.baudrate, timeout=1.5)
                 time.sleep(1.0) # Settle USB CDC
                 print(f"[SERIAL] Successfully connected to {port}!")
+                self.actual_serial_port = port
+                self._connection_start_time = time.time()
+                self.notify_telegram_startup()
                 return True
             except Exception as e:
                 print(f"[ERROR] Failed to open {port}: {e}. Retrying in 3s...")
@@ -974,11 +1026,28 @@ class SmartSafeGateway:
 
         # 1. Telemetry streaming frame (emitted every 2 seconds by YoloUNO)
         if msg_type == "telemetry":
+            climate_valid = bool(obj.get("climate_valid", True))
+            temp_raw = obj.get("temp")
+            temp_is_uncalibrated = False
+            try:
+                temp_is_uncalibrated = (float(temp_raw) <= 0.0)
+            except (ValueError, TypeError):
+                temp_is_uncalibrated = True
+
+            self.last_telemetry = obj
+            if "lockdown" in obj:
+                self.last_lockdown_state = bool(obj["lockdown"])
             if "breach" in obj:
                 self.last_breach_state = bool(obj["breach"])
 
             # Run Edge AI anomaly evaluation (T09)
             is_anomaly, anomaly_score, reason = self.detector.evaluate(obj)
+            # Suppress false anomalies during initial 6s sensor stabilization if climate is not yet calibrated
+            if (not climate_valid or temp_is_uncalibrated) and (time.time() - self._connection_start_time) < 6.0:
+                is_anomaly = False
+                anomaly_score = 0.0
+                reason = ""
+
             obj["anomaly"] = is_anomaly
             obj["anomaly_score"] = anomaly_score
             self.last_anomaly = is_anomaly
@@ -1020,7 +1089,9 @@ class SmartSafeGateway:
             temp_val = obj.get("temp")
             if temp_val is not None:
                 try:
-                    self.check_thermal_alert(float(temp_val), vault_state=obj.get("state", "LOCKED"))
+                    temp_f = float(temp_val)
+                    if temp_f > 0.0 and climate_valid:
+                        self.check_thermal_alert(temp_f, vault_state=obj.get("state", "LOCKED"))
                 except Exception as te:
                     if self.debug_mode:
                         print(f"[WARN] Thermal alert check error: {te}")
@@ -1065,8 +1136,41 @@ class SmartSafeGateway:
             is_significant = True
             log_category = "EVENT"
 
-            # Case 0: Security Auth Failed (Suppress if rogue badge or bad pin was already logged within 2.0s)
-            if event_name == "auth_failed":
+            # Case 0: Breach Alarm Acknowledged (Central handler across all sources: Badge, Web, Telegram, IR)
+            if event_name == "breach_acknowledged" or action == "breach_acknowledged" or cmd == "ACK_BREACH" or result == "breach_acknowledged":
+                now = time.time()
+                if (now - self._last_breach_ack_time) < 2.0:
+                    is_significant = False
+                else:
+                    self._last_breach_ack_time = now
+                    ev_source = obj.get("source", "")
+                    if (now - self._pending_telegram_time) < 3.0 and self._pending_telegram_action == "ack":
+                        user_tag = self._pending_telegram_user or "Telegram"
+                        event_desc = f"Breach Alarm Acknowledged (Telegram by {user_tag})"
+                        ack_source = f"Telegram ({user_tag})"
+                    elif ev_source == "badge_espnow" or source == "badge_espnow":
+                        event_desc = "Breach Alarm Acknowledged (Wearable Badge)"
+                        ack_source = "Wearable Badge (Yolo:Bit)"
+                        self.mock_state["last_badge"] = "AUTHORIZED BADGE"
+                    elif ev_source in ("ir_remote", "ir_pin") or source in ("ir_remote", "ir_pin"):
+                        event_desc = "Breach Alarm Acknowledged (IR Remote)"
+                        ack_source = "IR Remote Control"
+                    elif (now - self._pending_operator_ack) < 3.0 or ev_source in ("web_cloud", "usb_gateway") or source in ("web_cloud", "usb_gateway"):
+                        event_desc = "Breach Alarm Acknowledged (Local Gateway Console)"
+                        ack_source = "Local Gateway Console (T10)"
+                    else:
+                        event_desc = "Breach Alarm Acknowledged (Operator)"
+                        ack_source = "Local Operator Console"
+
+                    audit_state = "LOCKED"
+                    self.last_breach_state = False
+                    log_category = "SECURITY"
+                    self.notify_telegram_breach_cleared(source=ack_source)
+                    self._telegram_breach_notified = False
+                    self._telegram_bruteforce_notified = False
+
+            # Case 0.1: Security Auth Failed (Suppress if rogue badge or bad pin was already logged within 2.0s)
+            elif event_name == "auth_failed":
                 if (time.time() - self._last_rogue_badge_time) < 2.0:
                     is_significant = False
                 else:
@@ -1130,15 +1234,7 @@ class SmartSafeGateway:
                         self.mock_state["last_badge"] = "AUTHORIZED BADGE"
                         self.mock_state["espnow_link"] = "ACTIVE (-58 dBm)"
                         log_category = "LOCK"
-                elif cmd == "ACK_BREACH":
-                    event_desc = "Breach Alarm Acknowledged (Badge)"
-                    audit_state = "LOCKED"
-                    self.last_breach_state = False
-                    self.mock_state["last_badge"] = "AUTHORIZED BADGE"
-                    log_category = "SECURITY"
-                    if self._telegram_breach_notified:
-                        self.notify_telegram_breach_cleared(source="Badge Button")
-                        self._telegram_breach_notified = False
+
                 elif cmd == "PAIR_REQ":
                     event_desc = "Pairing Request Received (Badge)"
                     audit_state = "LOCKED"
@@ -1232,14 +1328,7 @@ class SmartSafeGateway:
                     self.last_known_state = "LOCKED"
                     self._last_lock_event_time = time.time()
                     log_category = "LOCK"
-                elif action == "breach_acknowledged":
-                    event_desc = "Breach Alarm Acknowledged (IR Remote)"
-                    audit_state = "LOCKED"
-                    self.last_breach_state = False
-                    log_category = "SECURITY"
-                    if self._telegram_breach_notified:
-                        self.notify_telegram_breach_cleared(source="IR Remote")
-                        self._telegram_breach_notified = False
+
                 elif result == "denied_no_presence":
                     event_desc = "IR Command Denied: Approach Vault First"
                     audit_state = "LOCKED"
@@ -1302,7 +1391,11 @@ class SmartSafeGateway:
             elif event_name == "breach":
                 sensor = obj.get("source", "ldr").upper()
                 light_adc = obj.get("light_adc", 0)
-                event_desc = f"Security Breach: Internal {sensor} Sensor Tripped (ADC={light_adc})"
+                is_lockdown = self.last_lockdown_state or bool(obj.get("lockdown", False))
+                if is_lockdown:
+                    event_desc = f"Security Breach: Internal {sensor} Sensor Tripped under Lockdown (ADC={light_adc})"
+                else:
+                    event_desc = f"Security Breach: Internal {sensor} Sensor Tripped (ADC={light_adc})"
                 audit_state = "LOCKED"
                 self.last_breach_state = True
                 log_category = "ALARM"
@@ -1310,25 +1403,9 @@ class SmartSafeGateway:
                     self.notify_telegram_breach(obj)
                     self._telegram_breach_notified = True
 
-            elif event_name == "breach_acknowledged":
-                if (time.time() - self._pending_telegram_time) < 3.0 and self._pending_telegram_action == "ack":
-                    user_tag = self._pending_telegram_user or "Telegram"
-                    event_desc = f"Breach Alarm Acknowledged (Telegram by {user_tag})"
-                    ack_source = f"Telegram ({user_tag})"
-                elif (time.time() - self._pending_operator_ack) < 2.5:
-                    event_desc = "Breach Alarm Acknowledged (Web / Cloud)"
-                    ack_source = "Web / Cloud Dashboard"
-                else:
-                    event_desc = "Breach Alarm Acknowledged"
-                    ack_source = "System Event"
-                audit_state = "LOCKED"
-                self.last_breach_state = False
-                log_category = "SECURITY"
-                if self._telegram_breach_notified:
-                    self.notify_telegram_breach_cleared(source=ack_source)
-                    self._telegram_breach_notified = False
 
             elif event_name == "lockdown_enabled":
+                self.last_lockdown_state = True
                 # Suppress if triggered within 2.0s of bruteforce alarm (bruteforce already logged the incident)
                 if (time.time() - self._last_bruteforce_time) < 2.0:
                     is_significant = False
@@ -1350,6 +1427,8 @@ class SmartSafeGateway:
                     log_category = "LOCKDOWN"
 
             elif event_name == "lockdown_disabled":
+                self.last_lockdown_state = False
+                self._telegram_bruteforce_notified = False
                 if (time.time() - self._pending_telegram_time) < 3.0 and self._pending_telegram_action == "lockdown_off":
                     user_tag = self._pending_telegram_user or "Telegram"
                     event_desc = f"Emergency Lockdown Cleared (Telegram by {user_tag})"
@@ -1362,7 +1441,13 @@ class SmartSafeGateway:
                 log_category = "SECURITY"
 
             elif event_name == "lockdown_blocked":
-                if (time.time() - self._pending_telegram_time) < 3.0 and self._pending_telegram_action == "unlock":
+                self.last_lockdown_state = True
+                is_telegram_unlock = (time.time() - self._pending_telegram_time) < 3.0 and self._pending_telegram_action == "unlock"
+                is_operator_unlock = (time.time() - self._pending_operator_unlock) < 2.5
+                self._pending_telegram_action = None
+                self._pending_operator_unlock = 0
+
+                if is_telegram_unlock:
                     user_tag = self._pending_telegram_user or "Telegram"
                     event_desc = f"Unlock Denied: System in Lockdown (Telegram by {user_tag})"
                     target_cid = getattr(self, '_pending_telegram_chat_id', None)
@@ -1373,7 +1458,7 @@ class SmartSafeGateway:
                             f"Use /unlockdown to clear lockdown first.",
                             target_chat_id=target_cid
                         )
-                elif (time.time() - self._pending_operator_unlock) < 2.5:
+                elif is_operator_unlock:
                     event_desc = "Unlock Denied: System in Lockdown (Web / Cloud)"
                 else:
                     event_desc = "Unlock Denied: System in Lockdown"
@@ -1424,14 +1509,11 @@ class SmartSafeGateway:
             action = obj.get("action", "")
             if alarm_name == "bruteforce_detected":
                 self._last_bruteforce_time = time.time()
+                self.last_lockdown_state = True
                 event_desc = "Security Alarm: Bruteforce Lockout Engaged (60s)"
-                if not self._telegram_breach_notified:
-                    self.notify_telegram_breach({
-                        "state": "LOCKED",
-                        "light_adc": "CRITICAL (Bruteforce Lockout)",
-                        "temp": "N/A"
-                    })
-                    self._telegram_breach_notified = True
+                if not self._telegram_bruteforce_notified:
+                    self.notify_telegram_bruteforce(lockout_sec=60)
+                    self._telegram_bruteforce_notified = True
             else:
                 clean_name = str(alarm_name).replace('_', ' ').strip().title()
                 event_desc = f"Security Alarm: {clean_name}"
@@ -1451,6 +1533,9 @@ class SmartSafeGateway:
 
     def run_mock_loop(self):
         """Simulates periodic YoloUNO telemetry for standalone testing."""
+        self.actual_serial_port = "MOCK SIMULATOR"
+        self._connection_start_time = time.time()
+        self.notify_telegram_startup()
         while self.running:
             time.sleep(2.0)
             mock_line = json.dumps({

@@ -15,6 +15,7 @@ if ! ping -c 1 -W 1 1.1.1.1 >/dev/null 2>&1 && ! ping -c 1 -W 1 8.8.8.8 >/dev/nu
 fi
 
 # 2. Fetch remote state quietly
+git config --global --add safe.directory "$REPO_DIR" >/dev/null 2>&1 || true
 if ! git fetch origin main >/dev/null 2>&1; then
     exit 0
 fi

@@ -5,8 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/IOT-Assignment-HCMUT
-ExecStart=%h/IOT-Assignment-HCMUT/scripts/rpi_boot_gateway.sh
+User=%USER%
+WorkingDirectory=%REPO_DIR%
+ExecStart=/bin/bash %REPO_DIR%/scripts/rpi_boot_gateway.sh
 Restart=always
 RestartSec=5
 StandardOutput=journal

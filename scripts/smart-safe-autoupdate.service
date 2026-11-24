@@ -4,5 +4,6 @@ After=network.target
 
 [Service]
 Type=oneshot
-WorkingDirectory=%h/IOT-Assignment-HCMUT
-ExecStart=%h/IOT-Assignment-HCMUT/scripts/rpi_check_update.sh
+User=%USER%
+WorkingDirectory=%REPO_DIR%
+ExecStart=/bin/bash %REPO_DIR%/scripts/rpi_check_update.sh

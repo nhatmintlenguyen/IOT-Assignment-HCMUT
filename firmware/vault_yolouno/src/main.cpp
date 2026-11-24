@@ -163,7 +163,7 @@ void onDataRecv(const uint8_t *srcMac, const uint8_t *data, int len) {
                 Serial.println("{\"type\":\"event\",\"source\":\"badge_espnow\",\"cmd\":\"UNLOCK\",\"result\":\"denied_no_presence\"}");
             } else {
                 if (status.breachActive) {
-                    acknowledge_breach();
+                    acknowledge_breach("badge_espnow");
                     lcd_show_notification("BADGE", "Breach Acked");
                 } else {
                     lcd_show_notification("BADGE", "Access Granted");
@@ -174,7 +174,7 @@ void onDataRecv(const uint8_t *srcMac, const uint8_t *data, int len) {
             }
         } else if (strcmp(req.cmd, "LOCK") == 0) {
             if (status.breachActive) {
-                acknowledge_breach();
+                acknowledge_breach("badge_espnow");
                 strcpy(resp.status, "OK_ACKED");
                 lcd_show_notification("BADGE", "Breach Acked");
             } else if (status.lockState == LockState::Locked) {
@@ -194,7 +194,7 @@ void onDataRecv(const uint8_t *srcMac, const uint8_t *data, int len) {
             lcd_show_notification("ROGUE BADGE", "Access Denied");
         } else if (strcmp(req.cmd, "ACK_BREACH") == 0) {
             if (status.breachActive) {
-                acknowledge_breach();
+                acknowledge_breach("badge_espnow");
                 strcpy(resp.status, "OK_ACKED");
                 lcd_show_notification("BADGE", "Breach Acked");
             } else {
@@ -242,15 +242,7 @@ void task_neopixel(void *pvParameters) {
       continue;
     }
 
-    // 0. Remote security lockdown: solid purple/magenta
-    if (status.lockdownActive) {
-      strip.setPixelColor(0, strip.Color(180, 0, 180));
-      strip.show();
-      vTaskDelay(pdMS_TO_TICKS(500));
-      continue;
-    }
-
-    // 1. Security breach alert: rapid 80ms red strobe
+    // 0. Security breach alert: rapid 80ms red strobe (TOP PRIORITY: Physical intrusion overrides lockdown)
     if (status.breachActive) {
       strip.setPixelColor(0, strip.Color(255, 0, 0));
       strip.show();
@@ -258,6 +250,14 @@ void task_neopixel(void *pvParameters) {
       strip.clear();
       strip.show();
       vTaskDelay(pdMS_TO_TICKS(80));
+      continue;
+    }
+
+    // 1. Remote security lockdown: solid purple/magenta
+    if (status.lockdownActive) {
+      strip.setPixelColor(0, strip.Color(180, 0, 180));
+      strip.show();
+      vTaskDelay(pdMS_TO_TICKS(500));
       continue;
     }
 
@@ -280,13 +280,15 @@ void task_neopixel(void *pvParameters) {
       continue;
     }
 
-    // 4. Normal locked state: blue / cyan / red gradient based on temperature
-    if (sensors.temperatureC < 20.0f) {
-      strip.setPixelColor(0, strip.Color(0, 0, 255)); // Blue (Cold)
-    } else if (sensors.temperatureC < 28.0f) {
-      strip.setPixelColor(0, strip.Color(0, 150, 150)); // Cyan (Comfortable)
+    // 4. Normal locked state: blue / cyan / red gradient based on temperature (Aligned with Telegram & RuleChain 20.0°C - 35.0°C)
+    if (!sensors.climateValid) {
+      strip.setPixelColor(0, strip.Color(0, 150, 150)); // Normal Cyan while warming up
+    } else if (sensors.temperatureC < 20.0f) {
+      strip.setPixelColor(0, strip.Color(0, 0, 255)); // Blue (Cold < 20°C)
+    } else if (sensors.temperatureC < 35.0f) {
+      strip.setPixelColor(0, strip.Color(0, 150, 150)); // Cyan (Comfortable / Normal 20°C - 35°C)
     } else {
-      strip.setPixelColor(0, strip.Color(255, 0, 0)); // Red (Warm)
+      strip.setPixelColor(0, strip.Color(255, 0, 0)); // Red (Overheating / Thermal Alert >= 35°C)
     }
 
     strip.show();
@@ -306,6 +308,9 @@ void task_led_blink(void *pvParameters) {
 }
 
 void task_telemetry_uart(void *pvParameters) {
+  // Allow sensors (DHT20, Ultrasonic, LDR) 3 seconds to complete initial sampling cycle before emitting telemetry
+  vTaskDelay(pdMS_TO_TICKS(3000));
+
   while(1) {
     const SensorSnapshot sensors = get_sensor_snapshot();
     const VaultStatus status = get_vault_status();
@@ -397,9 +402,15 @@ void loop() {
       start_pairing_mode();
     } else if (cmd == "unlock" || cmd.indexOf("unlock") >= 0) {
       Serial.println("[CMD] 'unlock' command received via USB");
-      request_unlock();
-      Serial.println("{\"type\":\"event\",\"source\":\"system\",\"action\":\"unlock\",\"state\":\"UNLOCKED\"}");
-      lcd_show_notification("WEB / CLOUD", "Access Granted");
+      const VaultStatus curStatus = get_vault_status();
+      if (curStatus.lockdownActive) {
+          Serial.println("{\"type\":\"event\",\"event\":\"lockdown_blocked\",\"action\":\"unlock\"}");
+          lcd_show_notification("LOCKED DOWN", "Unlock Blocked");
+      } else {
+          request_unlock();
+          Serial.println("{\"type\":\"event\",\"source\":\"system\",\"action\":\"unlock\",\"state\":\"UNLOCKED\"}");
+          lcd_show_notification("WEB / CLOUD", "Access Granted");
+      }
     } else if (cmd == "lock" || (cmd.indexOf("lock") >= 0 && cmd.indexOf("lockdown") < 0)) {
       Serial.println("[CMD] 'lock' command received via USB");
       set_lock_state(LockState::Locked);
@@ -407,7 +418,7 @@ void loop() {
       lcd_show_notification("WEB / CLOUD", "Vault Locked");
     } else if (cmd == "ack" || cmd.indexOf("ack") >= 0 || cmd == "reset") {
       Serial.println("[CMD] 'ack' command received via USB");
-      acknowledge_breach();
+      acknowledge_breach("web_cloud");
       lcd_show_notification("WEB / CLOUD", "Breach Acked");
     } else if (cmd == "lockdown 1" || cmd == "lockdown on" || cmd == "lockdown:1" || cmd.indexOf("\"lockdown\":true") >= 0 || (cmd.indexOf("lockdown") >= 0 && cmd.indexOf("true") >= 0)) {
       Serial.println("[CMD] Enabling security lockdown via USB");

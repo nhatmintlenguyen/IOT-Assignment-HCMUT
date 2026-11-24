@@ -103,9 +103,9 @@ class VaultAnomalyDetector:
             domain_penalty += severity
             reasons.append(f"Internal light detected while locked ({int(light)} ADC)")
 
-        # Fire / thermal attack
-        if temp > 36.0:
-            severity = min(0.85, (temp - 36.0) / 14.0)
+        # Fire / thermal attack (> 35.0°C aligned with Telegram & RuleChain)
+        if temp > 35.0:
+            severity = min(0.85, (temp - 35.0) / 15.0)
             domain_penalty += severity
             reasons.append(f"High thermal vector ({temp:.1f}°C)")
         elif temp < 14.0:

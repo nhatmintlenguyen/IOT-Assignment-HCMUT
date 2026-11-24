@@ -50,6 +50,7 @@ void task_sensor_monitor(void *pvParameters) {
     pinMode(ULTRASONIC_ECHO_PIN, INPUT);
     digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
     dht20.begin();
+    delay(150); // DHT20 requires >= 100ms power-on stabilization before first measurement
     lcd_display_begin();
 
     bool haveClimateReference = false;
@@ -68,9 +69,10 @@ void task_sensor_monitor(void *pvParameters) {
             set_light_reading(lightAdc);
 
             if (observe_light_level(lightAdc)) {
+                const VaultStatus curStatus = get_vault_status();
                 Serial.printf(
-                    "{\"type\":\"event\",\"event\":\"breach\",\"source\":\"ldr\",\"light_adc\":%d,\"state\":\"LOCKED\"}\n",
-                    lightAdc);
+                    "{\"type\":\"event\",\"event\":\"breach\",\"source\":\"ldr\",\"light_adc\":%d,\"state\":\"LOCKED\",\"lockdown\":%s}\n",
+                    lightAdc, curStatus.lockdownActive ? "true" : "false");
             }
         }
 
@@ -104,7 +106,8 @@ void task_sensor_monitor(void *pvParameters) {
 
             if (!readingValid) {
                 set_climate_reading(0.0f, 0.0f, false);
-                Serial.println("[WARN] DHT20 reading failed.");
+                Serial.println("[WARN] DHT20 reading failed (retrying in 400ms)...");
+                lastClimateSampleMs = now - (CLIMATE_SAMPLE_INTERVAL_MS - 400);
             } else {
                 bool acceptReading = true;
                 if (haveClimateReference &&

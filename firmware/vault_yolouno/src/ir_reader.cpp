@@ -220,9 +220,8 @@ void ir_reader_tick() {
             // 3. Key 'B' : Acknowledge security breach
             else if (key == 'B') {
                 if (status.breachActive) {
-                    acknowledge_breach();
+                    acknowledge_breach("ir_remote");
                     lcd_show_notification("PIN / IR REMOTE", "Breach Acked");
-                    Serial.println("{\"type\":\"event\",\"source\":\"ir_remote\",\"action\":\"breach_acknowledged\"}");
                 }
             }
             // 4. Key 'C' : Validate PIN code
@@ -231,9 +230,8 @@ void ir_reader_tick() {
                     if (status.lockdownActive) {
                         Serial.println("{\"type\":\"event\",\"source\":\"ir_pin\",\"result\":\"denied_lockdown\"}");
                     } else if (status.breachActive) {
-                        Serial.println("{\"type\":\"event\",\"source\":\"ir_pin\",\"result\":\"breach_acknowledged\"}");
                         reset_failed_attempts();
-                        acknowledge_breach();
+                        acknowledge_breach("ir_pin");
                         request_unlock();
                         lcd_show_notification("PIN CODE", "Breach Acked");
                     } else if (!sensors.personNear && !status.standbyActive) {

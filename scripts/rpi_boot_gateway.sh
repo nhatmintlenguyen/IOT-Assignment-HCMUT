@@ -15,6 +15,7 @@ echo "=== [SMART SAFE RPI BOOT] Starting Auto-Update & Launch ==="
 echo "[INFO] Checking network connectivity..."
 if ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1 || ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1; then
     echo "[INFO] Network online. Fetching latest origin/main..."
+    git config --global --add safe.directory "$REPO_DIR" >/dev/null 2>&1 || true
     git fetch origin main >/dev/null 2>&1 && git reset --hard origin/main >/dev/null 2>&1 || true
 else
     echo "[WARN] Network offline at boot. Starting gateway immediately using local code."
@@ -33,9 +34,19 @@ fi
 # Defaults to "auto" (LAN UDP Beacon auto-discovery), with fallback to last known LAN IP.
 # Can be overridden manually in .env via THINGSBOARD_HOST=1.2.3.4
 if [ -f "$REPO_DIR/.env" ]; then
-    set -a
-    source "$REPO_DIR/.env"
-    set +a
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        [[ -z "$line" || "$line" =~ ^# ]] && continue
+        if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+            key="${BASH_REMATCH[1]}"
+            val="${BASH_REMATCH[2]}"
+            val="${val%\"}"
+            val="${val#\"}"
+            val="${val%\'}"
+            val="${val#\'}"
+            export "$key"="$val"
+        fi
+    done < "$REPO_DIR/.env"
 fi
 
 TB_HOST="${THINGSBOARD_HOST:-auto}"
@@ -50,4 +61,5 @@ exec gateway/.venv/bin/python gateway/gateway.py \
     --fallback-host "$TB_FALLBACK" \
     --port "$TB_PORT" \
     --token "$TB_TOKEN" \
-    --serial-port "$SERIAL_PORT"
+    --serial-port "$SERIAL_PORT" \
+    "$@"

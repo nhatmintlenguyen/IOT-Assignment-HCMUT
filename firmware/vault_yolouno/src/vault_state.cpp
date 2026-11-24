@@ -84,13 +84,17 @@ void trigger_breach() {
     portEXIT_CRITICAL(&statusMux);
 }
 
-void acknowledge_breach() {
+void acknowledge_breach(const char* source) {
     portENTER_CRITICAL(&statusMux);
     breachLatched = false;
     breachActive = false;
     consecutiveBrightSamples = 0;
     portEXIT_CRITICAL(&statusMux);
-    Serial.println("{\"type\":\"event\",\"event\":\"breach_acknowledged\"}");
+    if (source && strlen(source) > 0) {
+        Serial.printf("{\"type\":\"event\",\"event\":\"breach_acknowledged\",\"source\":\"%s\"}\n", source);
+    } else {
+        Serial.println("{\"type\":\"event\",\"event\":\"breach_acknowledged\"}");
+    }
 }
 
 void set_lockdown(bool active) {
