@@ -184,6 +184,9 @@ class SmartSafeGateway:
         self.last_telemetry = {}
         self.detector = VaultAnomalyDetector()
         self._telegram_startup_notified = False
+        self._telegram_startup_delivered = False
+        self.is_internet_connected = False
+        self._last_internet_state = None
         self._telegram_bruteforce_notified = False
         self._connection_start_time = time.time()
         self.actual_serial_port = None
@@ -230,6 +233,7 @@ class SmartSafeGateway:
                 try:
                     with urllib.request.urlopen(req, timeout=5.0) as resp:
                         if resp.status == 200:
+                            self._telegram_startup_delivered = True
                             if self.debug_mode:
                                 print(f"{self._ts()} \033[92m[TELEGRAM] Message delivered successfully to chat {cid}!\033[0m")
                         else:
@@ -242,9 +246,8 @@ class SmartSafeGateway:
 
     def notify_telegram_startup(self):
         """Sends a single professional initialization message to Telegram when Gateway and Vault are online."""
-        if self._telegram_startup_notified or not self.telegram_enabled:
+        if self._telegram_startup_delivered or not self.telegram_enabled:
             return
-        self._telegram_startup_notified = True
 
         now_str = time.strftime("%Y-%m-%d %H:%M:%S")
         port_label = getattr(self, "actual_serial_port", None) or self.serial_port_name or "/dev/ttyACM0"
@@ -455,6 +458,48 @@ class SmartSafeGateway:
                     time.sleep(2.0)
 
         t = threading.Thread(target=_listener, name="telegram-listener-worker", daemon=True)
+        t.start()
+
+    def start_network_watchdog(self):
+        """Background watchdog monitoring internet connectivity, auto-reconnecting CoreIOT and delivering pending alerts."""
+        def _watchdog_loop():
+            time.sleep(3.0)
+            while self.running:
+                try:
+                    online = False
+                    for probe_host, probe_port in [("1.1.1.1", 53), ("8.8.8.8", 53), ("api.telegram.org", 443)]:
+                        try:
+                            s = socket.create_connection((probe_host, probe_port), timeout=2.0)
+                            s.close()
+                            online = True
+                            break
+                        except Exception:
+                            continue
+
+                    self.is_internet_connected = online
+
+                    # Transition: Offline -> Online
+                    if online and self._last_internet_state is False:
+                        print(f"{self._ts()} \033[92m[NETWORK] Internet connectivity restored! Re-syncing cloud services...\033[0m")
+
+                    if online:
+                        # 1. Auto-reconnect CoreIOT Cloud platform if disconnected
+                        if self.coreiot_token and self.coreiot_host and not self.coreiot_connected:
+                            print(f"{self._ts()} [COREIOT] Internet active: auto-reconnecting to Cloud Platform ({self.coreiot_host})...")
+                            self._connect_coreiot()
+
+                        # 2. Resend startup notification if it was missed due to offline boot
+                        if self.telegram_enabled and not self._telegram_startup_delivered and getattr(self, "actual_serial_port", None):
+                            self.notify_telegram_startup()
+
+                    self._last_internet_state = online
+                except Exception as e:
+                    if self.debug_mode:
+                        print(f"{self._ts()} [WATCHDOG] Error: {e}")
+
+                time.sleep(10.0)
+
+        t = threading.Thread(target=_watchdog_loop, name="network-watchdog", daemon=True)
         t.start()
 
     def _get_current_vault_state(self):
@@ -889,7 +934,17 @@ class SmartSafeGateway:
 
     def _connect_coreiot(self):
         """Connects secondary MQTT client to CoreIOT cloud platform for dual-cloud mirroring (T15)."""
+        if not self.coreiot_token or not self.coreiot_host:
+            return
         try:
+            if self.coreiot_client:
+                try:
+                    self.coreiot_client.loop_stop()
+                    self.coreiot_client.disconnect()
+                except Exception:
+                    pass
+                self.coreiot_client = None
+
             try:
                 self.coreiot_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="smart-safe-coreiot-mirror")
             except AttributeError:
@@ -898,13 +953,20 @@ class SmartSafeGateway:
             self.coreiot_client.username_pw_set(self.coreiot_token)
             self.coreiot_client.on_connect = self._on_coreiot_connect
             self.coreiot_client.on_message = self._on_mqtt_message
-            self.coreiot_client.on_disconnect = lambda c, u, d, p=None: setattr(self, "coreiot_connected", False)
-            print(f"[COREIOT] Connecting to Cloud Platform at {self.coreiot_host}:{self.coreiot_port}...")
+            self.coreiot_client.on_disconnect = self._on_coreiot_disconnect
+            if self.debug_mode:
+                print(f"[COREIOT] Connecting to Cloud Platform at {self.coreiot_host}:{self.coreiot_port}...")
             self.coreiot_client.connect(self.coreiot_host, self.coreiot_port, keepalive=60)
             self.coreiot_client.loop_start()
         except Exception as ce:
-            print(f"[WARN] Could not connect to CoreIOT cloud ({self.coreiot_host}): {ce}")
+            if self.debug_mode:
+                print(f"[WARN] Could not connect to CoreIOT cloud ({self.coreiot_host}): {ce}")
             self.coreiot_connected = False
+
+    def _on_coreiot_disconnect(self, client, userdata, disconnect_flags_or_rc, properties=None):
+        self.coreiot_connected = False
+        if self.debug_mode:
+            print("[COREIOT] Disconnected from Cloud Platform broker. Will auto-reconnect...")
 
     def _on_coreiot_connect(self, client, userdata, flags, rc, properties=None):
         rc_code = rc if isinstance(rc, int) else getattr(rc, "value", rc)
@@ -1535,6 +1597,7 @@ class SmartSafeGateway:
         """Simulates periodic YoloUNO telemetry for standalone testing."""
         self.actual_serial_port = "MOCK SIMULATOR"
         self._connection_start_time = time.time()
+        self.start_network_watchdog()
         self.notify_telegram_startup()
         while self.running:
             time.sleep(2.0)
@@ -1586,6 +1649,9 @@ class SmartSafeGateway:
             self.start_telegram_listener()
         else:
             print("Telegram Bot Alert      : DISABLED (Configure TELEGRAM_TOKEN and TELEGRAM_CHAT_ID in .env)")
+
+        # Start background network watchdog for self-healing internet recovery (CoreIOT & Telegram)
+        self.start_network_watchdog()
 
         # 2. Connect to ThingsBoard MQTT Broker
         connected = self.connect_mqtt()

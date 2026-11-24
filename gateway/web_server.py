@@ -670,6 +670,9 @@ def make_handler(gateway_instance, log_tee):
                     "anomaly": getattr(gateway_instance, "last_anomaly", False),
                     "anomaly_reason": getattr(gateway_instance, "last_anomaly_reason", ""),
                     "last_badge": getattr(gateway_instance, "mock_state", {}).get("last_badge", "Authorized Badge"),
+                    "mqtt_connected": getattr(gateway_instance, "mqtt_connected", False),
+                    "coreiot_connected": getattr(gateway_instance, "coreiot_connected", False),
+                    "internet_connected": getattr(gateway_instance, "is_internet_connected", False),
                     "logs": list(log_tee.buffer)[-150:] if log_tee else []
                 }
                 body = json.dumps(payload).encode("utf-8")
