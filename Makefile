@@ -159,7 +159,7 @@ run-gateway: gateway/.venv/bin/python ## Start Python Gateway (auto-discovers Th
 	gateway/.venv/bin/python gateway/gateway.py --host $(HOST) --port $(PORT) $(if $(TOKEN),--token $(TOKEN),) $(ARGS)
 
 benchmark: gateway/.venv/bin/python ## Run automated system performance, AI accuracy, and latency benchmarks (Chapter 4)
-	gateway/.venv/bin/python scripts/system_benchmark.py
+	gateway/.venv/bin/python scripts/system_benchmark.py $(ARGS)
 
 beacon: ## Run ThingsBoard UDP discovery beacon in foreground
 	python3 scripts/tb_beacon.py
