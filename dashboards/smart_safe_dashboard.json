@@ -22,7 +22,7 @@
                   "label": "Safe Door State",
                   "color": "#10b981",
                   "settings": {},
-                  "_hash": 0.44688305418905216,
+                  "_hash": 0.9873663352151842,
                   "units": "",
                   "decimals": 0,
                   "aggregationType": null,
@@ -173,7 +173,7 @@
                   "label": "Vault Temperature",
                   "color": "#f43f5e",
                   "settings": {},
-                  "_hash": 0.2295615063785995,
+                  "_hash": 0.42048385686309875,
                   "units": "\u00b0C",
                   "decimals": 1,
                   "aggregationType": null,
@@ -322,7 +322,7 @@
                   "label": "Vault Humidity",
                   "color": "#38bdf8",
                   "settings": {},
-                  "_hash": 0.29813671363166927,
+                  "_hash": 0.9293528376972375,
                   "units": "%",
                   "decimals": 1,
                   "aggregationType": null,
@@ -471,7 +471,7 @@
                   "label": "Vault Internal Light",
                   "color": "#fbbf24",
                   "settings": {},
-                  "_hash": 0.23099772954836295,
+                  "_hash": 0.8468584430365137,
                   "units": "ADC",
                   "decimals": 0,
                   "aggregationType": null,
@@ -620,7 +620,7 @@
                   "label": "Proximity Distance",
                   "color": "#2dd4bf",
                   "settings": {},
-                  "_hash": 0.6920898246051423,
+                  "_hash": 0.1100202092435627,
                   "units": "cm",
                   "decimals": 0,
                   "aggregationType": null,
@@ -769,7 +769,7 @@
                   "label": "AI Anomaly Detection Score",
                   "color": "#818cf8",
                   "settings": {},
-                  "_hash": 0.5090655002038623,
+                  "_hash": 0.35359475741033475,
                   "units": "",
                   "decimals": 2,
                   "aggregationType": null,
@@ -918,7 +918,7 @@
                   "label": "Security Breach Alert",
                   "color": "#10b981",
                   "settings": {},
-                  "_hash": 0.3245709187990591,
+                  "_hash": 0.8520163538204089,
                   "units": "",
                   "decimals": 0,
                   "aggregationType": null,
@@ -1069,7 +1069,7 @@
                   "label": "Lockdown Active",
                   "color": "#10b981",
                   "settings": {},
-                  "_hash": 0.2793260463735563,
+                  "_hash": 0.3002941029261126,
                   "units": "",
                   "decimals": 0,
                   "aggregationType": null,
@@ -1235,7 +1235,7 @@
                       "showPoints": false
                     }
                   },
-                  "_hash": 0.2622085884964479,
+                  "_hash": 0.5274330852879058,
                   "units": "ADC",
                   "decimals": 0,
                   "aggregationType": null,
@@ -1264,7 +1264,7 @@
                       "showPoints": false
                     }
                   },
-                  "_hash": 0.10786166110594742,
+                  "_hash": 0.5786441534591122,
                   "units": "cm",
                   "decimals": 0,
                   "aggregationType": null,
@@ -1293,7 +1293,7 @@
                       "showPoints": false
                     }
                   },
-                  "_hash": 0.05746466211911627,
+                  "_hash": 0.8146699432300106,
                   "units": "\u00b0C",
                   "decimals": 1,
                   "aggregationType": null,
@@ -1322,7 +1322,7 @@
                       "showPoints": false
                     }
                   },
-                  "_hash": 0.6884425390834289,
+                  "_hash": 0.7125293715925927,
                   "units": "",
                   "decimals": 3,
                   "aggregationType": null,
@@ -1807,7 +1807,7 @@
                     "useCellStyleFunction": true,
                     "cellStyleFunction": "if (value === \"UNLOCKED\") return {color: \"#f59e0b\", fontWeight: \"bold\"}; if (value === \"LOCKED\") return {color: \"#10b981\", fontWeight: \"bold\"}; if (value === \"DENIED\" || value === \"REJECTED\" || value === \"ALARM\" || value === \"LOCKDOWN\") return {color: \"#ef4444\", fontWeight: \"bold\"}; return {color: \"#ffffff\"};"
                   },
-                  "_hash": 0.4701017978667489
+                  "_hash": 0.4519075052860383
                 },
                 {
                   "name": "audit_event",
@@ -1815,7 +1815,7 @@
                   "label": "Event / Diagnosis",
                   "color": "#ffffff",
                   "settings": {},
-                  "_hash": 0.44777823121900295
+                  "_hash": 0.5770215569856818
                 }
               ]
             }
@@ -2379,7 +2379,7 @@
           "type": "singleEntity",
           "singleEntity": {
             "entityType": "DEVICE",
-            "id": "249b81a0-e400-11f1-bf0b-ed890d705073"
+            "id": "04c13980-e7cd-11f1-8651-a5a05aea2f71"
           }
         }
       }

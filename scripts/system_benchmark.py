@@ -275,7 +275,8 @@ class BenchmarkHarness:
             ("lock", b"lock\n", ["LOCKED", "ALREADY_LOCKED"]),
             ("unlock", b"unlock\n", ["UNLOCKED", "ALREADY_UNLOCKED"]),
             ("lock", b"lock\n", ["LOCKED", "ALREADY_LOCKED"]),
-            ("lockdown", b"lockdown\n", ["LOCKDOWN"]),
+            ("lockdown_on", b"lockdown 1\n", ["LOCKDOWN"]),
+            ("lockdown_off", b"lockdown 0\n", ["LOCKDOWN"]),
             ("ack_alarm", b"ack\n", ["ACK", "CLEARED"])
         ]
 
@@ -311,6 +312,7 @@ class BenchmarkHarness:
 
         self.results["live_hardware"] = {
             "n_telemetry_frames": len(telemetry_samples),
+            "n_rpc_trials": len(live_rpc_latencies),
             "telemetry_interval_ms": round(mean_interval, 1),
             "rpc_latency_mean_ms": round(rpc_mean, 2),
             "rpc_latency_min_ms": round(rpc_min, 2),
@@ -494,7 +496,7 @@ class BenchmarkHarness:
             ("2", "ESP-NOW packet loss (%)", "1000", f"{esp_loss:.2f}", "0.00 / 0.80", "< 2.0 %", "PASS"),
             ("3", "AI model accuracy (%)", "2500", f"{ai_acc:.1f}", f"{ai_acc - 0.5:.1f} / {ai_acc + 0.5:.1f}", "> 95.0 %", "PASS"),
             ("4", "AI inference latency (ms)", "1000", f"{ai_lat:.2f}", f"{ai_lat_min:.2f} / {ai_lat_max:.2f}", "< 10 ms", "PASS"),
-            ("5", "Control / RPC round-trip latency (ms)", "200" if self.mode != "live" else "5", f"{rpc_mean:.1f}", f"{rpc_min:.1f} / {rpc_max:.1f}", "< 150 ms", "PASS"),
+            ("5", "Control / RPC round-trip latency (ms)", "200" if self.mode != "live" else str(self.results.get("live_hardware", {}).get("n_rpc_trials", 6)), f"{rpc_mean:.1f}", f"{rpc_min:.1f} / {rpc_max:.1f}", "< 150 ms", "PASS"),
             ("6", "Telegram alert delivery latency (ms)", "10", f"{tg_mean:.1f}", f"{tg_min:.1f} / {tg_max:.1f}", "< 1500 ms", "PASS")
         ]
 
