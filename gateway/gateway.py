@@ -963,13 +963,20 @@ class SmartSafeGateway:
                 print(f"[WARN] Could not connect to CoreIOT cloud ({self.coreiot_host}): {ce}")
             self.coreiot_connected = False
 
-    def _on_coreiot_disconnect(self, client, userdata, disconnect_flags_or_rc, properties=None):
+    def _on_coreiot_disconnect(self, client, userdata, *args, **kwargs):
         self.coreiot_connected = False
         if self.debug_mode:
             print("[COREIOT] Disconnected from Cloud Platform broker. Will auto-reconnect...")
 
-    def _on_coreiot_connect(self, client, userdata, flags, rc, properties=None):
-        rc_code = rc if isinstance(rc, int) else getattr(rc, "value", rc)
+    def _on_coreiot_connect(self, client, userdata, *args, **kwargs):
+        rc_code = 0
+        if len(args) >= 2:
+            rc = args[1]
+            rc_code = rc if isinstance(rc, int) else getattr(rc, "value", rc)
+        elif len(args) == 1:
+            rc = args[0]
+            rc_code = rc if isinstance(rc, int) else getattr(rc, "value", rc)
+
         if rc_code == 0:
             self.coreiot_connected = True
             print(f"\033[92m[COREIOT] Connected successfully to Cloud Platform ({self.coreiot_host})!\033[0m")
@@ -986,8 +993,15 @@ class SmartSafeGateway:
         if self.coreiot_client and self.coreiot_connected:
             self.coreiot_client.publish(topic, payload_str)
 
-    def _on_mqtt_connect(self, client, userdata, flags, rc, properties=None):
-        rc_code = rc if isinstance(rc, int) else getattr(rc, "value", rc)
+    def _on_mqtt_connect(self, client, userdata, *args, **kwargs):
+        rc_code = 0
+        if len(args) >= 2:
+            rc = args[1]
+            rc_code = rc if isinstance(rc, int) else getattr(rc, "value", rc)
+        elif len(args) == 1:
+            rc = args[0]
+            rc_code = rc if isinstance(rc, int) else getattr(rc, "value", rc)
+
         if rc_code == 0:
             self.mqtt_connected = True
             print("[MQTT] Connected to ThingsBoard successfully!")
@@ -998,7 +1012,7 @@ class SmartSafeGateway:
             self.mqtt_connected = False
             print(f"[MQTT] Connection refused with code {rc_code}")
 
-    def _on_mqtt_disconnect(self, client, userdata, disconnect_flags_or_rc, properties=None):
+    def _on_mqtt_disconnect(self, client, userdata, *args, **kwargs):
         self.mqtt_connected = False
         print("[MQTT] Disconnected from ThingsBoard broker. Reconnecting...")
 

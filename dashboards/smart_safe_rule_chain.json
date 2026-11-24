@@ -18,7 +18,7 @@
     "root": true,
     "debugMode": false,
     "externalId": null,
-    "version": 3,
+    "version": 9,
     "configuration": null,
     "additionalInfo": null
   },
@@ -27,7 +27,7 @@
       "entityType": "RULE_CHAIN",
       "id": "11cfa5b0-e400-11f1-bf0b-ed890d705073"
     },
-    "version": 3,
+    "version": 9,
     "firstNodeIndex": 2,
     "nodes": [
       {
@@ -55,8 +55,8 @@
         },
         "externalId": null,
         "additionalInfo": {
-          "layoutX": 824,
-          "layoutY": 156
+          "layoutX": 689,
+          "layoutY": 10
         }
       },
       {
@@ -86,8 +86,8 @@
         },
         "externalId": null,
         "additionalInfo": {
-          "layoutX": 825,
-          "layoutY": 52
+          "layoutX": 687,
+          "layoutY": 533
         }
       },
       {
@@ -138,8 +138,8 @@
         },
         "externalId": null,
         "additionalInfo": {
-          "layoutX": 825,
-          "layoutY": 266
+          "layoutX": 756,
+          "layoutY": 448
         }
       },
       {
@@ -165,8 +165,8 @@
         },
         "externalId": null,
         "additionalInfo": {
-          "layoutX": 825,
-          "layoutY": 379
+          "layoutX": 622,
+          "layoutY": 605
         }
       },
       {
@@ -190,8 +190,8 @@
         },
         "externalId": null,
         "additionalInfo": {
-          "layoutX": 825,
-          "layoutY": 468
+          "layoutX": 739,
+          "layoutY": 334
         }
       },
       {
@@ -211,12 +211,12 @@
         "queueName": null,
         "configurationVersion": 0,
         "configuration": {
-          "jsScript": "var isBreach = msg.breach === true;\nvar isLightBreach = (msg.state === 'LOCKED' || msg.state === undefined) && msg.light_adc > 500;\nvar isAiAnomaly = msg.anomaly_score !== undefined && Number(msg.anomaly_score) >= 0.50;\nvar isThermalAttack = msg.temp !== undefined && Number(msg.temp) > 35.0;\n\nreturn isBreach || isLightBreach || isAiAnomaly || isThermalAttack;"
+          "jsScript": "var isBreach = (msg.breach === true);\nvar isLightBreach = ((msg.state === \"LOCKED\" || msg.state === undefined) && msg.light_adc > 500);\nvar isAiAnomaly = (msg.anomaly_score !== undefined && Number(msg.anomaly_score) >= 0.50);\nvar isThermalAttack = (msg.temp !== undefined && Number(msg.temp) > 35.0);\nreturn isBreach || isLightBreach || isAiAnomaly || isThermalAttack;"
         },
         "externalId": null,
         "additionalInfo": {
-          "layoutX": 824,
-          "layoutY": 280
+          "layoutX": 688,
+          "layoutY": 96
         }
       },
       {
@@ -246,8 +246,8 @@
         },
         "externalId": null,
         "additionalInfo": {
-          "layoutX": 1120,
-          "layoutY": 280
+          "layoutX": 985,
+          "layoutY": 50
         }
       },
       {
@@ -267,12 +267,12 @@
         "queueName": null,
         "configurationVersion": 0,
         "configuration": {
-          "jsScript": "var noBreach = msg.breach === false && (msg.light_adc === undefined || msg.light_adc <= 500);\nvar normalTemp = msg.temp === undefined || (Number(msg.temp) >= 20.0 && Number(msg.temp) <= 35.0);\nvar normalAi = msg.anomaly_score === undefined || Number(msg.anomaly_score) < 0.50;\nvar isAckEvent = msg.audit_event !== undefined && msg.audit_event.indexOf('Breach Acknowledged') !== -1;\n\nreturn (noBreach && normalTemp && normalAi) || isAckEvent;"
+          "jsScript": "var noBreach = (msg.breach === false && (msg.light_adc === undefined || msg.light_adc <= 500));\nvar normalTemp = (msg.temp === undefined || (Number(msg.temp) >= 20.0 && Number(msg.temp) <= 35.0));\nvar normalAi = (msg.anomaly_score === undefined || Number(msg.anomaly_score) < 0.50);\nvar isAckEvent = (msg.audit_event !== undefined && msg.audit_event.indexOf(\"Breach Acknowledged\") !== -1);\nreturn (noBreach && normalTemp && normalAi) || isAckEvent;"
         },
         "externalId": null,
         "additionalInfo": {
-          "layoutX": 824,
-          "layoutY": 400
+          "layoutX": 689,
+          "layoutY": 181
         }
       },
       {
@@ -298,8 +298,8 @@
         },
         "externalId": null,
         "additionalInfo": {
-          "layoutX": 1120,
-          "layoutY": 400
+          "layoutX": 987,
+          "layoutY": 166
         }
       }
     ],
