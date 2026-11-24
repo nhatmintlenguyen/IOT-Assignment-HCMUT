@@ -267,7 +267,7 @@
         "queueName": null,
         "configurationVersion": 0,
         "configuration": {
-          "jsScript": "return msg.breach === false && (msg.light_adc === undefined || msg.light_adc <= 500);"
+          "jsScript": "var noBreach = msg.breach === false && (msg.light_adc === undefined || msg.light_adc <= 500);\nvar normalTemp = msg.temp === undefined || (Number(msg.temp) >= 20.0 && Number(msg.temp) <= 35.0);\nvar normalAi = msg.anomaly_score === undefined || Number(msg.anomaly_score) < 0.50;\nvar isAckEvent = msg.audit_event !== undefined && msg.audit_event.indexOf('Breach Acknowledged') !== -1;\n\nreturn (noBreach && normalTemp && normalAi) || isAckEvent;"
         },
         "externalId": null,
         "additionalInfo": {
