@@ -1,0 +1,158 @@
+{
+  "test_mode": "mock",
+  "table_4_1_header": [
+    "No.",
+    "Metric",
+    "Trials",
+    "Mean",
+    "Min / Max",
+    "Target",
+    "Source",
+    "Status"
+  ],
+  "table_4_1_rows": [
+    [
+      "1",
+      "Sensor -> dashboard latency (ms)",
+      "-",
+      "-",
+      "-",
+      "< 200 ms",
+      "N/A",
+      "N/A"
+    ],
+    [
+      "2",
+      "ESP-NOW packet loss (%)",
+      "1000",
+      "0.00",
+      "-",
+      "< 2.0 %",
+      "SIMULATED",
+      "N/A"
+    ],
+    [
+      "3",
+      "AI model accuracy (%) [95% CI]",
+      "2500",
+      "96.44",
+      "95.64 / 97.10",
+      "> 95.0 %",
+      "MEASURED (synthetic set)",
+      "PASS"
+    ],
+    [
+      "4",
+      "AI inference latency (ms)",
+      "1000",
+      "5.45",
+      "4.95 / 10.20",
+      "< 10 ms",
+      "MEASURED (host)",
+      "PASS"
+    ],
+    [
+      "5",
+      "Serial command round-trip (ms)",
+      "-",
+      "-",
+      "-",
+      "< 150 ms",
+      "N/A",
+      "N/A"
+    ],
+    [
+      "6",
+      "Telegram API round-trip (ms)",
+      "10",
+      "236.5",
+      "155.1 / 280.3",
+      "< 1500 ms",
+      "SIMULATED",
+      "N/A"
+    ]
+  ],
+  "detailed_metrics": {
+    "ai_benchmark": {
+      "n_samples": 2500,
+      "confusion_matrix": {
+        "tp": 417,
+        "tn": 1994,
+        "fp": 6,
+        "fn": 83
+      },
+      "accuracy_pct": 96.44,
+      "precision_pct": 98.58,
+      "recall_pct": 83.4,
+      "f1_score_pct": 90.36,
+      "specificity_pct": 99.7,
+      "latency_mean_ms": 5.45,
+      "latency_min_ms": 4.95,
+      "latency_max_ms": 10.2,
+      "latency_p95_ms": 5.92,
+      "n_latency_trials": 1000,
+      "detections_by_source": {
+        "ML": 6,
+        "RULES": 408,
+        "ML+RULES": 9
+      },
+      "recall_by_vector": {
+        "optical_drill": {
+          "n": 84,
+          "detected": 84
+        },
+        "heat_torch": {
+          "n": 84,
+          "detected": 84
+        },
+        "cryogenic_freeze": {
+          "n": 83,
+          "detected": 83
+        },
+        "flooding": {
+          "n": 83,
+          "detected": 83
+        },
+        "loitering": {
+          "n": 83,
+          "detected": 0
+        },
+        "breach_flag": {
+          "n": 83,
+          "detected": 83
+        }
+      },
+      "ml_only_night_opening": {
+        "n": 100,
+        "detected_by_ml_alone": 100
+      },
+      "test_set": "synthetic (seed 101): 2000 normal + 500 attack vectors",
+      "host": "Linux-7.2.15-76070215-generic-x86_64-with-glibc2.39"
+    },
+    "gateway_pipeline": {
+      "n_trials": 1000,
+      "mean_ms": 5.562,
+      "min_ms": 4.894,
+      "max_ms": 13.602,
+      "throughput_fps": 179.8
+    },
+    "telegram_alert": {
+      "source": "SIMULATED",
+      "method": "time.sleep(N(240 ms, 30 ms)) simulation",
+      "n_trials": 10,
+      "mean_ms": 236.5,
+      "min_ms": 155.1,
+      "max_ms": 280.3
+    },
+    "esp_now": {
+      "source": "SIMULATED",
+      "n_packets": 1000,
+      "delivered": 1000,
+      "pdr_pct": 100.0,
+      "loss_pct": 0.0,
+      "mean_latency_ms": 2.45,
+      "min_latency_ms": 1.1,
+      "max_latency_ms": 6.25
+    }
+  }
+}

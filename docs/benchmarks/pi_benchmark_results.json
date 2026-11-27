@@ -1,0 +1,122 @@
+{
+  "test_mode": "live",
+  "table_4_1_header": [
+    "No.",
+    "Metric",
+    "Trials",
+    "Mean",
+    "Min / Max",
+    "Target",
+    "Source",
+    "Status"
+  ],
+  "table_4_1_rows": [
+    [
+      "1",
+      "Sensor -> dashboard latency (ms)",
+      "-",
+      "-",
+      "-",
+      "< 200 ms",
+      "N/A",
+      "N/A"
+    ],
+    [
+      "2",
+      "ESP-NOW packet loss (%)",
+      "1000",
+      "0.00",
+      "-",
+      "< 2.0 %",
+      "SIMULATED",
+      "N/A"
+    ],
+    [
+      "3",
+      "AI model accuracy (%) [95% CI]",
+      "2500",
+      "96.68",
+      "95.90 / 97.31",
+      "> 95.0 %",
+      "MEASURED (synthetic set)",
+      "PASS"
+    ],
+    [
+      "4",
+      "AI inference latency (ms)",
+      "1000",
+      "71.89",
+      "70.92 / 283.67",
+      "< 10 ms",
+      "MEASURED (host)",
+      "FAIL"
+    ],
+    [
+      "5",
+      "Serial command round-trip (ms)",
+      "6",
+      "47.0",
+      "27.8 / 52.8",
+      "< 150 ms",
+      "LIVE (USB serial)",
+      "PASS"
+    ],
+    [
+      "6",
+      "Telegram API round-trip (ms)",
+      "5",
+      "643.1",
+      "583.0 / 801.1",
+      "< 1500 ms",
+      "LIVE (getMe)",
+      "PASS"
+    ]
+  ],
+  "detailed_metrics": {
+    "ai_benchmark": {
+      "n_samples": 2500,
+      "confusion_matrix": {
+        "tp": 417,
+        "tn": 2000,
+        "fp": 0,
+        "fn": 83
+      },
+      "accuracy_pct": 96.68,
+      "precision_pct": 100.0,
+      "recall_pct": 83.4,
+      "f1_score_pct": 90.95,
+      "specificity_pct": 100.0,
+      "latency_mean_ms": 71.89,
+      "latency_min_ms": 70.92,
+      "latency_max_ms": 283.67,
+      "latency_p95_ms": 72.8,
+      "model_version": "v1 (ML score capped at 0.40, measured on 2026-11-24/27 before the T09 fix)"
+    },
+    "live_hardware": {
+      "n_telemetry_frames": 20,
+      "n_rpc_trials": 6,
+      "telemetry_interval_ms": 1520.1,
+      "rpc_latency_mean_ms": 47.03,
+      "rpc_latency_min_ms": 27.82,
+      "rpc_latency_max_ms": 52.8
+    },
+    "telegram_alert": {
+      "n_trials": 5,
+      "mean_ms": 643.1,
+      "min_ms": 583.0,
+      "max_ms": 801.1,
+      "source": "LIVE"
+    },
+    "esp_now": {
+      "n_packets": 1000,
+      "delivered": 1000,
+      "pdr_pct": 100.0,
+      "loss_pct": 0.0,
+      "mean_latency_ms": 2.45,
+      "min_latency_ms": 1.1,
+      "max_latency_ms": 6.25,
+      "source": "SIMULATED"
+    },
+    "rebuild_note": "Table re-computed with scripts/system_benchmark.py --rebuild: real PASS/FAIL verdicts, source labels, row 1 (previously RPC + fixed offset) marked N/A."
+  }
+}

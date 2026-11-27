@@ -1,10 +1,21 @@
 """
 Smart Safe Guardian - Comprehensive System Benchmark & Testing Harness
 Supports two execution modes:
-  1. --live : Real hardware test (connects to physical YoloUNO over USB CDC serial,
-              measures real HC-SR04 sonar / LDR / DHT20 sensor timings, real serial
-              RPC roundtrip to SG90 servo, real Telegram delivery, and real ESP-NOW events).
-  2. --mock : Software-in-the-loop (SIL) simulation for pre-deployment testing and CI.
+  1. --live : Real hardware test (connects to the physical YoloUNO over USB CDC serial,
+              measures the telemetry frame interval and the serial command round-trip
+              gateway -> YoloUNO -> gateway).
+  2. --mock : Software-in-the-loop (SIL) run without hardware (default).
+
+Every row of Table 4.1 carries a "Source" label:
+  LIVE       measured on the physical hardware / real network service
+  MEASURED   measured on the host running this script (AI model, synthetic test set)
+  SIMULATED  produced by a statistical simulation (NOT a measurement)
+  N/A        not measured in this run
+Verdicts (PASS / FAIL) are computed from the value and the target; rows without a
+measurement get "N/A".
+
+  --rebuild FILE : recompute the table (sources + verdicts) of an existing result
+                   file from its "detailed_metrics" section, without re-running tests.
 """
 
 import sys
@@ -12,6 +23,7 @@ import os
 import time
 import json
 import argparse
+import platform
 import urllib.request
 import urllib.parse
 from pathlib import Path
@@ -29,6 +41,9 @@ try:
     HAS_SERIAL = True
 except ImportError:
     HAS_SERIAL = False
+
+
+VECTOR_NAMES = ["optical_drill", "heat_torch", "cryogenic_freeze", "flooding", "loitering", "breach_flag"]
 
 
 class BenchmarkHarness:
@@ -81,7 +96,18 @@ class BenchmarkHarness:
                 np.random.normal(140.0, 30.0) if is_unlocked == 0
                 else np.random.normal(450.0, 100.0)
             )
+            # Access (unlocked) happens during working hours, mostly around midday;
+            # a locked vault is normal at any hour.
+            # (same schedule as the training baseline: N(13.5 h, 2.5 h) truncated to [8 h, 20 h)).
+            if is_unlocked == 1:
+                hour = np.random.normal(13.5, 2.5)
+                while not (8.0 <= hour < 20.0):
+                    hour = np.random.normal(13.5, 2.5)
+            else:
+                hour = np.random.uniform(0.0, 24.0)
+            hour = round(float(hour), 2)
             normal_samples.append({
+                "hour": hour,
                 "temp": round(float(np.random.normal(26.5, 2.0)), 1),
                 "hum": round(float(np.random.normal(62.0, 5.0)), 1),
                 "light_adc": int(np.clip(light_adc, 30, 800)),
@@ -154,15 +180,25 @@ class BenchmarkHarness:
                     "breach": True,
                     "ground_truth": 1
                 }
+            sample["hour"] = round(float(np.random.uniform(0.0, 24.0)), 2)  # attacks can happen at any time
+            sample["vector"] = VECTOR_NAMES[vector]
             anomaly_samples.append(sample)
 
         all_samples = normal_samples + anomaly_samples
         y_true = [s["ground_truth"] for s in all_samples]
 
         y_pred = []
+        source_counts = {"ML": 0, "RULES": 0, "ML+RULES": 0}
+        per_vector = {}
         for s in all_samples:
-            is_anomaly, score, reason = self.detector.evaluate(s)
-            y_pred.append(1 if is_anomaly else 0)
+            det = self.detector.evaluate_detailed(s)
+            y_pred.append(1 if det["is_anomaly"] else 0)
+            if det["is_anomaly"]:
+                source_counts[det["source"]] += 1
+            if s["ground_truth"] == 1:
+                v = per_vector.setdefault(s["vector"], {"n": 0, "detected": 0})
+                v["n"] += 1
+                v["detected"] += int(det["is_anomaly"])
 
         tp = sum(1 for yt, yp in zip(y_true, y_pred) if yt == 1 and yp == 1)
         tn = sum(1 for yt, yp in zip(y_true, y_pred) if yt == 0 and yp == 0)
@@ -199,6 +235,25 @@ class BenchmarkHarness:
         print(f"  F1-Score             : {f1_score:.2f}%")
         print(f"  Specificity          : {specificity:.2f}%")
         print(f"  Inference Latency    : Mean {lat_mean:.2f} ms | P95 {lat_p95:.2f} ms | Min/Max {lat_min:.2f}/{lat_max:.2f} ms")
+        print(f"  Detections by source : ML only={source_counts['ML']}, rules only={source_counts['RULES']}, both={source_counts['ML+RULES']}")
+        for name, v in per_vector.items():
+            print(f"    - {name:<17}: {v['detected']}/{v['n']} detected")
+
+        # Separate scenario (NOT part of the 2500-sample set): door opened outside working
+        # hours with otherwise normal values. No rule can see it; only the ML model can.
+        n_night, ml_hits = 100, 0
+        for _ in range(n_night):
+            night_hour = float(np.random.uniform(-3.5, 7.0)) % 24.0  # 20:30 -> 07:00
+            det = self.detector.evaluate_detailed({
+                "hour": round(night_hour, 2),
+                "temp": round(float(np.random.normal(27.0, 1.5)), 1),
+                "hum": round(float(np.random.normal(62.0, 4.0)), 1),
+                "light_adc": int(np.random.uniform(800, 3800)),
+                "distance_cm": round(float(np.random.uniform(15.0, 35.0)), 1),
+                "state": "UNLOCKED", "breach": False})
+            ml_hits += int(det["source"] == "ML")
+        print(f"  ML-only scenario     : night opening (20:30-07:00) detected by ML alone {ml_hits}/{n_night}")
+        print("                         (separate scenario, not included in the 2500-sample metrics)")
 
         self.results["ai_benchmark"] = {
             "n_samples": total,
@@ -211,7 +266,13 @@ class BenchmarkHarness:
             "latency_mean_ms": round(lat_mean, 2),
             "latency_min_ms": round(lat_min, 2),
             "latency_max_ms": round(lat_max, 2),
-            "latency_p95_ms": round(lat_p95, 2)
+            "latency_p95_ms": round(lat_p95, 2),
+            "n_latency_trials": len(latencies_ms),
+            "detections_by_source": source_counts,
+            "recall_by_vector": per_vector,
+            "ml_only_night_opening": {"n": n_night, "detected_by_ml_alone": ml_hits},
+            "test_set": "synthetic (seed 101): 2000 normal + 500 attack vectors",
+            "host": platform.platform()
         }
 
     # =========================================================================
@@ -387,8 +448,9 @@ class BenchmarkHarness:
                     print(f"  [WARN] Telegram ping warning: {e}")
                     break
 
+        telegram_source = "LIVE" if dispatch_latencies else "SIMULATED"
         if not dispatch_latencies:
-            print("  [SIMULATED] Measuring payload construction + HTTPS WAN baseline...")
+            print("  [SIMULATED] No Telegram token: simulating a WAN round-trip (NOT a measurement)...")
             for _ in range(10):
                 t0 = time.perf_counter()
                 alert_html = "<b>🚨 SECURITY ALERT: Vault Breach Detected!</b>"
@@ -402,9 +464,11 @@ class BenchmarkHarness:
 
         print(f"  Trials               : {len(dispatch_latencies)}")
         print(f"  Telegram Latency     : Mean {mean_ms:.1f} ms | Min {min_ms:.1f} ms | Max {max_ms:.1f} ms")
-        print(f"  Target Latency       : < 1500 ms (PASS)")
+        print(f"  Target Latency       : < 1500 ms")
 
         self.results["telegram_alert"] = {
+            "source": telegram_source,
+            "method": "Bot API getMe HTTPS round-trip" if telegram_source == "LIVE" else "time.sleep(N(240 ms, 30 ms)) simulation",
             "n_trials": len(dispatch_latencies),
             "mean_ms": round(mean_ms, 1),
             "min_ms": round(min_ms, 1),
@@ -412,8 +476,13 @@ class BenchmarkHarness:
         }
 
     def benchmark_esp_now(self, n_packets=1000):
+        """
+        SIMULATION ONLY (Monte-Carlo with a 1.2 % raw loss rate and 3 retries).
+        The ESP-NOW link is not instrumented by this harness, so this is NOT a measurement,
+        even in --live mode. It is labelled SIMULATED in Table 4.1.
+        """
         print("\n" + "=" * 70)
-        print("  5. BENCHMARK: ESP-NOW Wireless Transmission Reliability (T06)")
+        print("  5. SIMULATION: ESP-NOW Wireless Transmission Reliability (T06) [SIMULATED]")
         print("=" * 70)
 
         np.random.seed(42)
@@ -449,6 +518,7 @@ class BenchmarkHarness:
         print(f"  Transmission Latency : Mean {mean_lat:.2f} ms | Min {min_lat:.2f} ms | Max {max_lat:.2f} ms")
 
         self.results["esp_now"] = {
+            "source": "SIMULATED",
             "n_packets": n_packets,
             "delivered": delivered,
             "pdr_pct": round(pdr_pct, 2),
@@ -461,63 +531,119 @@ class BenchmarkHarness:
     # =========================================================================
     # 4. Summary Table 4.1
     # =========================================================================
-    def generate_report_table(self):
-        print("\n" + "=" * 70)
-        mode_label = "PHYSICAL HARDWARE" if self.mode == "live" else "SOFTWARE SIMULATION (MOCK)"
-        print(f"  SUMMARY: Table 4.1 System Measurement Data [{mode_label}]")
-        print("=" * 70)
+    def generate_report_table(self, out_path=None):
+        rows = build_table_rows(self.results, self.mode)
+        print_table(rows, self.mode)
+        out_path = Path(out_path) if out_path else DEFAULT_OUTPUT
+        write_results(out_path, self.mode, rows, self.results)
 
-        ai_acc = self.results["ai_benchmark"]["accuracy_pct"]
-        ai_lat = self.results["ai_benchmark"]["latency_mean_ms"]
-        ai_lat_min = self.results["ai_benchmark"]["latency_min_ms"]
-        ai_lat_max = self.results["ai_benchmark"]["latency_max_ms"]
-        esp_loss = self.results["esp_now"]["loss_pct"]
-        tg_mean = self.results["telegram_alert"]["mean_ms"]
-        tg_min = self.results["telegram_alert"]["min_ms"]
-        tg_max = self.results["telegram_alert"]["max_ms"]
 
-        if self.mode == "live" and "live_hardware" in self.results:
-            rpc_mean = self.results["live_hardware"]["rpc_latency_mean_ms"]
-            rpc_min = self.results["live_hardware"]["rpc_latency_min_ms"]
-            rpc_max = self.results["live_hardware"]["rpc_latency_max_ms"]
-            e2e_mean = round(rpc_mean + 45.0, 1)
-            e2e_min = round(rpc_min + 35.0, 1)
-            e2e_max = round(rpc_max + 65.0, 1)
-        else:
-            rpc_mean = 8.4
-            rpc_min = 4.9
-            rpc_max = 14.9
-            e2e_mean = 72.4
-            e2e_min = 45.0
-            e2e_max = 120.0
+# =========================================================================
+# Table 4.1 construction (shared by live/mock runs and --rebuild)
+# =========================================================================
+DEFAULT_OUTPUT = PROJECT_ROOT / "docs" / "benchmarks" / "benchmark_results.json"
+TABLE_HEADER = ["No.", "Metric", "Trials", "Mean", "Min / Max", "Target", "Source", "Status"]
 
-        rows = [
-            ("1", "Sensor → dashboard latency (ms)", "100", f"{e2e_mean:.1f}", f"{e2e_min:.1f} / {e2e_max:.1f}", "< 200 ms", "PASS"),
-            ("2", "ESP-NOW packet loss (%)", "1000", f"{esp_loss:.2f}", "0.00 / 0.80", "< 2.0 %", "PASS"),
-            ("3", "AI model accuracy (%)", "2500", f"{ai_acc:.1f}", f"{ai_acc - 0.5:.1f} / {ai_acc + 0.5:.1f}", "> 95.0 %", "PASS"),
-            ("4", "AI inference latency (ms)", "1000", f"{ai_lat:.2f}", f"{ai_lat_min:.2f} / {ai_lat_max:.2f}", "< 10 ms", "PASS"),
-            ("5", "Control / RPC round-trip latency (ms)", "200" if self.mode != "live" else str(self.results.get("live_hardware", {}).get("n_rpc_trials", 6)), f"{rpc_mean:.1f}", f"{rpc_min:.1f} / {rpc_max:.1f}", "< 150 ms", "PASS"),
-            ("6", "Telegram alert delivery latency (ms)", "10", f"{tg_mean:.1f}", f"{tg_min:.1f} / {tg_max:.1f}", "< 1500 ms", "PASS")
-        ]
 
-        header = f"| {'No.':<3} | {'Metric':<38} | {'Trials':<7} | {'Mean':<9} | {'Min / Max':<15} | {'Target':<10} | {'Status':<6} |"
-        sep = f"|{'-'*5}|{'-'*40}|{'-'*9}|{'-'*11}|{'-'*17}|{'-'*12}|{'-'*8}|"
+def _verdict(value, op, target, source="MEASURED"):
+    # A simulation is not evidence: no PASS/FAIL verdict for simulated rows.
+    if value is None or str(source).startswith("SIMULATED"):
+        return "N/A"
+    ok = value < target if op == "<" else value > target
+    return "PASS" if ok else "FAIL"
 
-        print(header)
-        print(sep)
-        for r in rows:
-            print(f"| {r[0]:<3} | {r[1]:<38} | {r[2]:<7} | {r[3]:<9} | {r[4]:<15} | {r[5]:<10} | {r[6]:<6} |")
 
-        out_path = PROJECT_ROOT / "docs" / "benchmark_results.json"
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(out_path, "w", encoding="utf-8") as f:
-            json.dump({
-                "test_mode": self.mode,
-                "table_4_1_rows": rows,
-                "detailed_metrics": self.results
-            }, f, indent=2)
+def _wilson_ci(p_hat, n, z=1.96):
+    """95 % Wilson confidence interval for a proportion (returned in %)."""
+    if n == 0:
+        return 0.0, 0.0
+    denom = 1 + z * z / n
+    centre = (p_hat + z * z / (2 * n)) / denom
+    half = z * ((p_hat * (1 - p_hat) / n + z * z / (4 * n * n)) ** 0.5) / denom
+    return (centre - half) * 100.0, (centre + half) * 100.0
 
-        print(f"\n[OK] Full benchmark metrics successfully written to: {out_path}")
+
+def build_table_rows(results, mode):
+    rows = []
+    live = results.get("live_hardware") if mode == "live" else None
+
+    # 1. Sensor -> dashboard latency: requires timestamps on the ThingsBoard side,
+    #    which this harness does not collect. Never estimated.
+    rows.append(["1", "Sensor -> dashboard latency (ms)", "-", "-", "-", "< 200 ms", "N/A", "N/A"])
+
+    # 2. ESP-NOW packet loss (Monte-Carlo simulation)
+    esp = results.get("esp_now")
+    if esp:
+        rows.append(["2", "ESP-NOW packet loss (%)", str(esp["n_packets"]), f"{esp['loss_pct']:.2f}", "-",
+                     "< 2.0 %", esp.get("source", "SIMULATED"), _verdict(esp["loss_pct"], "<", 2.0, esp.get("source", "SIMULATED"))])
+    else:
+        rows.append(["2", "ESP-NOW packet loss (%)", "-", "-", "-", "< 2.0 %", "N/A", "N/A"])
+
+    # 3-4. AI model (measured on the host, synthetic test set)
+    ai = results["ai_benchmark"]
+    acc = ai["accuracy_pct"]
+    lo, hi = _wilson_ci(acc / 100.0, ai["n_samples"])
+    rows.append(["3", "AI model accuracy (%) [95% CI]", str(ai["n_samples"]), f"{acc:.2f}", f"{lo:.2f} / {hi:.2f}",
+                 "> 95.0 %", "MEASURED (synthetic set)", _verdict(acc, ">", 95.0)])
+    rows.append(["4", "AI inference latency (ms)", str(ai.get("n_latency_trials", 1000)), f"{ai['latency_mean_ms']:.2f}",
+                 f"{ai['latency_min_ms']:.2f} / {ai['latency_max_ms']:.2f}", "< 10 ms", "MEASURED (host)",
+                 _verdict(ai["latency_mean_ms"], "<", 10.0)])
+
+    # 5. Serial command round-trip gateway -> YoloUNO -> gateway (live only)
+    if live:
+        rows.append(["5", "Serial command round-trip (ms)", str(live["n_rpc_trials"]), f"{live['rpc_latency_mean_ms']:.1f}",
+                     f"{live['rpc_latency_min_ms']:.1f} / {live['rpc_latency_max_ms']:.1f}", "< 150 ms",
+                     "LIVE (USB serial)", _verdict(live["rpc_latency_mean_ms"], "<", 150.0)])
+    else:
+        rows.append(["5", "Serial command round-trip (ms)", "-", "-", "-", "< 150 ms", "N/A", "N/A"])
+
+    # 6. Telegram Bot API round-trip
+    tg = results.get("telegram_alert")
+    if tg:
+        rows.append(["6", "Telegram API round-trip (ms)", str(tg["n_trials"]), f"{tg['mean_ms']:.1f}",
+                     f"{tg['min_ms']:.1f} / {tg['max_ms']:.1f}", "< 1500 ms",
+                     "LIVE (getMe)" if tg.get("source", "LIVE") == "LIVE" else tg["source"],
+                     _verdict(tg["mean_ms"], "<", 1500.0, tg.get("source", "LIVE"))])
+    return rows
+
+
+def print_table(rows, mode):
+    mode_label = "PHYSICAL HARDWARE" if mode == "live" else "SOFTWARE-IN-THE-LOOP (no hardware)"
+    print("\n" + "=" * 70)
+    print(f"  SUMMARY: Table 4.1 System Measurement Data [{mode_label}]")
+    print("=" * 70)
+    widths = [3, 32, 6, 8, 15, 10, 24, 6]
+    fmt = "| " + " | ".join(f"{{:<{w}}}" for w in widths) + " |"
+    print(fmt.format(*TABLE_HEADER))
+    print("|" + "|".join("-" * (w + 2) for w in widths) + "|")
+    for r in rows:
+        print(fmt.format(*r))
+
+
+def write_results(out_path, mode, rows, results):
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "test_mode": mode,
+            "table_4_1_header": TABLE_HEADER,
+            "table_4_1_rows": rows,
+            "detailed_metrics": results
+        }, f, indent=2, ensure_ascii=False)
+    print(f"\n[OK] Benchmark results written to: {out_path}")
+
+
+def rebuild(path):
+    """Recompute Table 4.1 (sources + verdicts) of an existing result file."""
+    path = Path(path)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    results = data["detailed_metrics"]
+    results.setdefault("esp_now", {}).setdefault("source", "SIMULATED")
+    if "telegram_alert" in results:
+        results["telegram_alert"].setdefault("source", "LIVE")
+    rows = build_table_rows(results, data.get("test_mode", "mock"))
+    print_table(rows, data.get("test_mode", "mock"))
+    write_results(path, data.get("test_mode", "mock"), rows, results)
 
 
 def main():
@@ -526,7 +652,13 @@ def main():
     parser.add_argument("--mock", action="store_true", help="Run software-in-the-loop (SIL) simulation benchmark (default)")
     parser.add_argument("--port", default="auto", help="Serial port for physical YoloUNO (default: auto)")
     parser.add_argument("--baudrate", type=int, default=115200, help="Serial baudrate (default: 115200)")
+    parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="Result JSON path (default: docs/benchmarks/benchmark_results.json)")
+    parser.add_argument("--rebuild", metavar="FILE", help="Recompute Table 4.1 of an existing result file and exit")
     args = parser.parse_args()
+
+    if args.rebuild:
+        rebuild(args.rebuild)
+        return
 
     mode = "live" if args.live else "mock"
     harness = BenchmarkHarness(mode=mode, serial_port=args.port, baudrate=args.baudrate)
@@ -554,7 +686,7 @@ def main():
 
     harness.benchmark_telegram_alert()
     harness.benchmark_esp_now()
-    harness.generate_report_table()
+    harness.generate_report_table(args.output)
 
 
 if __name__ == "__main__":
