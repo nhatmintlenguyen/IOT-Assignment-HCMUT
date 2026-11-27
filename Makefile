@@ -27,7 +27,9 @@ DETECTED_BADGE_PORT := $(shell \
 	ls /dev/ttyUSB* 2>/dev/null | head -n 1 \
 )
 
+# YoloUNO port: SERIAL_PORT from .env (legacy name VAULT_PORT still accepted).
 # Allow manual override via PORT=/dev/... or auto-resolve if set to 'auto' or empty
+VAULT_PORT := $(if $(SERIAL_PORT),$(SERIAL_PORT),$(VAULT_PORT))
 ifeq ($(filter-out auto,$(VAULT_PORT)),)
   VAULT_PORT := $(if $(PORT),$(PORT),$(DETECTED_VAULT_PORT))
 else
@@ -44,7 +46,7 @@ endif
 MONITOR_REQUESTED := $(if $(filter monitor,$(MAKECMDGOALS)),1,$(if $(MONITOR),1,0))
 MONITOR_TARGET    := $(if $(filter 1,$(MONITOR_REQUESTED)),-t monitor,)
 
-.PHONY: help env init init-all up down restart logs ps tunnel tunnel-down reset check-pio install-pio ports build-vault flash-vault flash-vault-monitor monitor-vault build-badge flash-badge flash-badge-monitor monitor-badge run-gateway setup-rpi-service setup-thingsboard monitor beacon beacon-bg beacon-stop benchmark
+.PHONY: help env init init-all up down restart logs ps tunnel tunnel-down reset check-pio install-pio ports build-vault flash-vault flash-vault-monitor monitor-vault build-badge flash-badge flash-badge-monitor monitor-badge run-gateway setup-rpi-service setup-thingsboard monitor beacon beacon-bg beacon-stop benchmark reboot-vault reboot-badge
 
 help: ## List commands
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/ -/'
@@ -129,13 +131,13 @@ monitor-badge: check-pio ## Open serial monitor for Yolo:Bit (115200 baud)
 	fi
 	$(PIO) device monitor -d firmware/badge_yolobit -p $(BADGE_PORT) -b 115200
 
-reboot-vault: ## Send software reboot command to YoloUNO over serial
+reboot-vault: gateway/.venv/bin/python ## Send software reboot command to YoloUNO over serial
 	@if [ -z "$(VAULT_PORT)" ]; then \
 		echo "\033[91m[ERROR] No YoloUNO port detected.\033[0m"; exit 1; \
 	fi
 	@gateway/.venv/bin/python -c "import serial, time; s = serial.Serial('$(VAULT_PORT)', 115200, timeout=1); time.sleep(0.1); s.write(b'reboot\n'); s.close(); print('[OK] YoloUNO reboot command sent!')"
 
-reboot-badge: ## Send software reboot command to Yolo:Bit over serial
+reboot-badge: gateway/.venv/bin/python ## Send software reboot command to Yolo:Bit over serial
 	@if [ -z "$(BADGE_PORT)" ]; then \
 		echo "\033[91m[ERROR] No Yolo:Bit port detected.\033[0m"; exit 1; \
 	fi
@@ -151,12 +153,13 @@ gateway/.venv/bin/python:
 	gateway/.venv/bin/pip install -r gateway/requirements.txt
 
 HOST ?= $(if $(THINGSBOARD_HOST),$(THINGSBOARD_HOST),auto)
-PORT ?= $(if $(THINGSBOARD_MQTT_PORT),$(THINGSBOARD_MQTT_PORT),1883)
+# MQTT port (distinct from PORT, which overrides the serial port for flash/monitor targets)
+MQTT_PORT ?= $(if $(THINGSBOARD_PORT),$(THINGSBOARD_PORT),$(if $(THINGSBOARD_MQTT_PORT),$(THINGSBOARD_MQTT_PORT),1883))
 TOKEN ?= $(THINGSBOARD_TOKEN)
 ARGS ?=
 
 run-gateway: gateway/.venv/bin/python ## Start Python Gateway (auto-discovers ThingsBoard, reads .env)
-	gateway/.venv/bin/python gateway/gateway.py --host $(HOST) --port $(PORT) $(if $(TOKEN),--token $(TOKEN),) $(ARGS)
+	gateway/.venv/bin/python gateway/gateway.py --host $(HOST) --port $(MQTT_PORT) $(if $(TOKEN),--token $(TOKEN),) $(ARGS)
 
 benchmark: gateway/.venv/bin/python ## Run automated system performance, AI accuracy, and latency benchmarks (Chapter 4)
 	gateway/.venv/bin/python scripts/system_benchmark.py $(ARGS)

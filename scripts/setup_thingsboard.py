@@ -683,35 +683,45 @@ def ensure_rule_chain(tenant_token):
     meta = requests.get(f"{TB_URL}/api/ruleChain/{rc_id}/metadata", headers=headers).json()
     names = [n.get("name") for n in meta.get("nodes", [])]
 
+    # NOTE: scripts are kept strictly identical to dashboards/smart_safe_rule_chain.json
+    # (real newlines '\n', not escaped '\\n', otherwise the JS engine raises a SyntaxError).
     filter_js = (
-        "var isBreach = msg.breach === true;\\n"
-        "var isLightBreach = (msg.state === 'LOCKED' || msg.state === undefined) && msg.light_adc > 500;\\n"
-        "var isAiAnomaly = msg.anomaly_score !== undefined && Number(msg.anomaly_score) >= 0.50;\\n"
-        "var isThermalAttack = msg.temp !== undefined && Number(msg.temp) > 35.0;\\n\\n"
+        "var isBreach = (msg.breach === true);\n"
+        'var isLightBreach = ((msg.state === "LOCKED" || msg.state === undefined) && msg.light_adc > 500);\n'
+        "var isAiAnomaly = (msg.anomaly_score !== undefined && Number(msg.anomaly_score) >= 0.50);\n"
+        "var isThermalAttack = (msg.temp !== undefined && Number(msg.temp) > 35.0);\n"
         "return isBreach || isLightBreach || isAiAnomaly || isThermalAttack;"
+    )
+
+    clear_filter_js = (
+        "var noBreach = (msg.breach === false && (msg.light_adc === undefined || msg.light_adc <= 500));\n"
+        "var normalTemp = (msg.temp === undefined || (Number(msg.temp) >= 20.0 && Number(msg.temp) <= 35.0));\n"
+        "var normalAi = (msg.anomaly_score === undefined || Number(msg.anomaly_score) < 0.50);\n"
+        'var isAckEvent = (msg.audit_event !== undefined && msg.audit_event.indexOf("Breach Acknowledged") !== -1);\n'
+        "return (noBreach && normalTemp && normalAi) || isAckEvent;"
     )
 
     if "Detect Breach & AI Anomaly" in names:
         for n in meta.get("nodes", []):
             if n.get("name") == "Detect Breach & AI Anomaly":
                 n["configuration"]["jsScript"] = filter_js
+            elif n.get("name") == "Check Breach Resolved":
+                n["configuration"]["jsScript"] = clear_filter_js
         requests.post(f"{TB_URL}/api/ruleChain/metadata", headers=headers, json=meta)
-        print("[+] Rule Chain already has security automation nodes (threshold 35.0°C updated).")
+        print("[+] Rule Chain already has security automation nodes (detection & clear filters updated).")
         return
 
     alarm_details_js = (
-        "var details = {};\\n"
-        "details.light_adc = msg.light_adc;\\n"
-        "details.temp = msg.temp;\\n"
-        "details.hum = msg.hum;\\n"
-        "details.distance_cm = msg.distance_cm;\\n"
-        "details.state = msg.state || 'LOCKED';\\n"
-        "details.anomaly_score = msg.anomaly_score;\\n"
-        "if (msg.anomaly_reason) details.reason = msg.anomaly_reason;\\n"
+        "var details = {};\n"
+        "details.light_adc = msg.light_adc;\n"
+        "details.temp = msg.temp;\n"
+        "details.hum = msg.hum;\n"
+        "details.distance_cm = msg.distance_cm;\n"
+        "details.state = msg.state || 'LOCKED';\n"
+        "details.anomaly_score = msg.anomaly_score;\n"
+        "if (msg.anomaly_reason) details.reason = msg.anomaly_reason;\n"
         "return details;"
     )
-
-    clear_filter_js = "return msg.breach === false && (msg.light_adc === undefined || msg.light_adc <= 500);"
 
     node_filter = {
         "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",

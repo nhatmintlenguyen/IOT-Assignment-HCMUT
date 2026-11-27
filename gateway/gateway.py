@@ -9,6 +9,7 @@ Integrates Edge AI Anomaly Detection (T09) via Scikit-Learn Isolation Forest.
 """
 
 import argparse
+import collections
 import glob
 import json
 import os
@@ -157,6 +158,11 @@ class SmartSafeGateway:
         self.coreiot_token = (os.getenv("COREIOT_TOKEN", "")).strip()
         self.coreiot_client = None
         self.coreiot_connected = False
+        # Offline store-and-forward buffer for CoreIOT (T15): telemetry produced while the
+        # cloud link is down is kept with its original timestamp and replayed on reconnect.
+        self.coreiot_buffer = collections.deque(maxlen=int(os.getenv("COREIOT_BUFFER_SIZE", "5000")))
+        self._coreiot_buffer_lock = threading.Lock()
+        self._coreiot_replaying = False
 
         self.serial_conn = None
         self.mqtt_client = None
@@ -284,18 +290,20 @@ class SmartSafeGateway:
         )
         self.send_telegram_message(msg, parse_mode="HTML")
 
-    def notify_telegram_bruteforce(self, lockout_sec=60):
-        """Dispatches a dedicated Bruteforce Security Alert to Telegram."""
+    def notify_telegram_bruteforce(self):
+        """Dispatches a dedicated Bruteforce Security Alert to Telegram.
+        The firmware lockdown has no timeout: it stays active until an administrator
+        clears it (dashboard, Telegram /unlockdown, local console or serial 'lockdown 0')."""
         now_str = time.strftime("%Y-%m-%d %H:%M:%S")
         msg = (
             "🚨 <b>SMART SAFE GUARDIAN - SECURITY ALERT</b> 🚨\n\n"
             "<b>Event:</b> Bruteforce Attack Detected!\n"
             "<b>Status:</b> 3 CONSECUTIVE AUTHENTICATION FAILURES\n"
             "<b>Action:</b> Emergency Lockdown Engaged\n"
-            f"<b>Lockout Duration:</b> <code>{lockout_sec}s</code>\n"
+            "<b>Lockout Duration:</b> <code>Until cleared by an administrator</code>\n"
             "<b>Vault State:</b> <code>LOCKED (LOCKDOWN)</code>\n"
             f"<b>Timestamp:</b> <code>{now_str}</code>\n\n"
-            "🔒 <i>All keypad PINs and wearable badges temporarily blocked.</i>"
+            "🔒 <i>All keypad PINs and wearable badges are blocked. Use /unlockdown to restore access.</i>"
         )
         self.send_telegram_message(msg, parse_mode="HTML")
 
@@ -627,7 +635,7 @@ class SmartSafeGateway:
             msg = (
                 f"🔓 <b>Door Unlocked</b> (by {first_name})\n\n"
                 f"• <b>Door State:</b> <code>UNLOCKED</code>\n"
-                f"• <b>Auto-Lock:</b> Timer armed (10s)\n"
+                f"• <b>Auto-Lock:</b> Timer armed (30s)\n"
                 f"• <b>Internal Light:</b> <code>{cur['light']}</code> ADC"
             )
             # Broadcast state change to all authorized admins
@@ -743,6 +751,19 @@ class SmartSafeGateway:
     def _ts(self):
         """Returns current local time formatted as [HH:MM:SS]."""
         return time.strftime("[%H:%M:%S]")
+
+    @staticmethod
+    def _mask(secret):
+        """Masks a token / chat ID for logs (logs are also streamed to the local web console)."""
+        secret = str(secret or "")
+        if not secret:
+            return "(none)"
+        return secret[:4] + "…" if len(secret) > 6 else "****"
+
+    def secrets(self):
+        """Secrets that must never appear in the log buffer exposed by the web console."""
+        values = [self.tb_token, self.gw_token, self.coreiot_token, self.telegram_token] + list(self.telegram_chat_ids)
+        return [v for v in values if v and len(str(v)) >= 6]
 
     # --------------------------------------------------------------------------
     # SERIAL COMMUNICATION (YoloUNO <--> Gateway)
@@ -906,7 +927,11 @@ class SmartSafeGateway:
             self.mqtt_client.connect(self.tb_host, self.tb_port, keepalive=60)
             self.mqtt_client.loop_start()
 
-            # Connect optional gateway heartbeat client so both Gateway and Vault remain Active
+            # Connect optional gateway heartbeat client so both Gateway and Vault remain Active.
+            # Token priority: GATEWAY_TOKEN (.env / --gateway-token) > UDP beacon > default
+            # token created by scripts/setup_thingsboard.py.
+            if not self.gw_token:
+                self.gw_token = "GATEWAY_SECRET_TOKEN"
             if self.gw_token:
                 try:
                     try:
@@ -918,7 +943,7 @@ class SmartSafeGateway:
                     self.gw_client.loop_start()
                     self.gw_client.publish("v1/devices/me/telemetry", json.dumps({"gateway_status": "online"}), qos=1)
                     self._last_gw_ping = time.time()
-                    print(f"[MQTT] Gateway link connected (token: {self.gw_token})")
+                    print(f"[MQTT] Gateway link connected (token: {self._mask(self.gw_token)})")
                 except Exception as ge:
                     print(f"[WARN] Gateway link warning: {ge}")
 
@@ -982,16 +1007,71 @@ class SmartSafeGateway:
             print(f"\033[92m[COREIOT] Connected successfully to Cloud Platform ({self.coreiot_host})!\033[0m")
             client.subscribe("v1/devices/me/rpc/request/+")
             print("[COREIOT] Subscribed to remote Cloud RPC requests!")
+            if self.coreiot_buffer:
+                print(f"[COREIOT BUFFER] Reconnected: replaying {len(self.coreiot_buffer)} buffered frame(s)...")
+                self._replay_coreiot_buffer()
         else:
             self.coreiot_connected = False
             print(f"[COREIOT] Connection refused with code {rc_code}")
 
     def _publish_mqtt(self, topic, payload_str):
-        """Publishes a payload to Local ThingsBoard and CoreIOT Cloud if connected."""
+        """Publishes a payload to Local ThingsBoard and CoreIOT Cloud if connected.
+        Telemetry for CoreIOT is buffered (with its timestamp) while the cloud link is down."""
         if self.mqtt_client and self.mqtt_connected:
             self.mqtt_client.publish(topic, payload_str)
-        if self.coreiot_client and self.coreiot_connected:
+        if self.coreiot_client and self.coreiot_connected and not self._coreiot_replaying:
             self.coreiot_client.publish(topic, payload_str)
+        elif self.coreiot_token and self.coreiot_host and topic == "v1/devices/me/telemetry":
+            self._buffer_coreiot_telemetry(payload_str)
+
+    def _buffer_coreiot_telemetry(self, payload_str):
+        """Stores a telemetry payload as {"ts": <ms>, "values": {...}} (ThingsBoard format)."""
+        try:
+            values = json.loads(payload_str)
+        except (TypeError, ValueError):
+            return
+        if not isinstance(values, dict):
+            return
+        if "ts" in values and "values" in values:
+            entry = values
+        else:
+            entry = {"ts": int(time.time() * 1000), "values": values}
+        with self._coreiot_buffer_lock:
+            if len(self.coreiot_buffer) == self.coreiot_buffer.maxlen and self.debug_mode:
+                print(f"{self._ts()} [COREIOT BUFFER] Full ({self.coreiot_buffer.maxlen}): dropping oldest frame")
+            self.coreiot_buffer.append(entry)
+
+    def _replay_coreiot_buffer(self):
+        """Replays buffered telemetry to CoreIOT in chronological order after a reconnection."""
+        with self._coreiot_buffer_lock:
+            if self._coreiot_replaying or not self.coreiot_buffer:
+                return
+            self._coreiot_replaying = True
+
+        def _worker():
+            sent = 0
+            try:
+                while self.coreiot_connected and self.coreiot_client:
+                    with self._coreiot_buffer_lock:
+                        if not self.coreiot_buffer:
+                            break
+                        entry = self.coreiot_buffer[0]
+                    info = self.coreiot_client.publish("v1/devices/me/telemetry", json.dumps(entry), qos=1)
+                    if info.rc != mqtt.MQTT_ERR_SUCCESS:
+                        break  # link lost again: keep the entry for the next reconnection
+                    with self._coreiot_buffer_lock:
+                        if self.coreiot_buffer and self.coreiot_buffer[0] is entry:
+                            self.coreiot_buffer.popleft()
+                    sent += 1
+                    time.sleep(0.02)  # stay below CoreIOT rate limits
+            finally:
+                with self._coreiot_buffer_lock:
+                    self._coreiot_replaying = False
+                    remaining = len(self.coreiot_buffer)
+                print(f"{self._ts()} [COREIOT BUFFER] Replayed {sent} buffered frame(s) to CoreIOT "
+                      f"({remaining} still pending)")
+
+        threading.Thread(target=_worker, name="coreiot-buffer-replay", daemon=True).start()
 
     def _on_mqtt_connect(self, client, userdata, *args, **kwargs):
         rc_code = 0
@@ -1066,9 +1146,9 @@ class SmartSafeGateway:
             self.write_serial(f"lockdown {1 if is_active else 0}")
             response_payload["lockdown"] = is_active
         elif method in ("getState", "getLockState"):
-            response_payload["value"] = (self.mock_state["state"] == "UNLOCKED")
+            response_payload["value"] = (self._get_current_vault_state()["state"] == "UNLOCKED")
         elif method in ("getLockdown",):
-            response_payload["value"] = bool(self.mock_state["lockdown"])
+            response_payload["value"] = bool(self._get_current_vault_state()["lockdown"])
         else:
             print(f"{self._ts()} [RPC] Unknown RPC method: '{method}'")
             response_payload["status"] = "unknown_method"
@@ -1117,15 +1197,22 @@ class SmartSafeGateway:
                 self.last_breach_state = bool(obj["breach"])
 
             # Run Edge AI anomaly evaluation (T09)
-            is_anomaly, anomaly_score, reason = self.detector.evaluate(obj)
+            detail = self.detector.evaluate_detailed(obj)
+            is_anomaly, anomaly_score, reason = detail["is_anomaly"], detail["anomaly_score"], detail["reason"]
+            ml_score = detail["ml_score"]
+            rule_flags = ",".join(detail["rule_flags"])
             # Suppress false anomalies during initial 6s sensor stabilization if climate is not yet calibrated
             if (not climate_valid or temp_is_uncalibrated) and (time.time() - self._connection_start_time) < 6.0:
                 is_anomaly = False
                 anomaly_score = 0.0
                 reason = ""
+                ml_score = 0.0
+                rule_flags = ""
 
             obj["anomaly"] = is_anomaly
             obj["anomaly_score"] = anomaly_score
+            obj["ml_score"] = ml_score
+            obj["rule_flags"] = rule_flags
             self.last_anomaly = is_anomaly
             self.last_anomaly_score = anomaly_score
             self.last_anomaly_reason = reason if is_anomaly else ""
@@ -1586,9 +1673,9 @@ class SmartSafeGateway:
             if alarm_name == "bruteforce_detected":
                 self._last_bruteforce_time = time.time()
                 self.last_lockdown_state = True
-                event_desc = "Security Alarm: Bruteforce Lockout Engaged (60s)"
+                event_desc = "Security Alarm: Bruteforce Lockout Engaged (until admin clears)"
                 if not self._telegram_bruteforce_notified:
-                    self.notify_telegram_bruteforce(lockout_sec=60)
+                    self.notify_telegram_bruteforce()
                     self._telegram_bruteforce_notified = True
             else:
                 clean_name = str(alarm_name).replace('_', ' ').strip().title()
@@ -1652,13 +1739,13 @@ class SmartSafeGateway:
         self.resolve_target_host()
 
         print(f"Target ThingsBoard Host : {self.tb_host}:{self.tb_port}")
-        print(f"Device Access Token     : {self.tb_token}")
+        print(f"Device Access Token     : {self._mask(self.tb_token)}")
         if self.coreiot_token and self.coreiot_host:
             print(f"CoreIOT Cloud Mirror    : \033[92mENABLED\033[0m ({self.coreiot_host}:{self.coreiot_port})")
         else:
             print("CoreIOT Cloud Mirror    : DISABLED (Set COREIOT_TOKEN in .env to mirror to HCMUT CoreIOT)")
         if self.telegram_enabled:
-            chat_list_str = ", ".join(self.telegram_chat_ids)
+            chat_list_str = ", ".join(self._mask(c) for c in self.telegram_chat_ids)
             print(f"Telegram Bot Alert      : \033[92mENABLED\033[0m (Chat IDs: {chat_list_str})")
             self.start_telegram_listener()
         else:
@@ -1730,17 +1817,18 @@ def main():
     parser = argparse.ArgumentParser(description="Smart Safe Guardian - Local IoT Gateway Daemon")
     parser.add_argument("--host", default=os.getenv("THINGSBOARD_HOST", "auto"),
                         help="ThingsBoard MQTT Broker host IP, or 'auto' for UDP LAN beacon discovery (default: auto)")
-    parser.add_argument("--port", type=int, default=int(os.getenv("THINGSBOARD_PORT", "1883")),
+    parser.add_argument("--port", type=int,
+                        default=int(os.getenv("THINGSBOARD_PORT") or os.getenv("THINGSBOARD_MQTT_PORT") or "1883"),
                         help="ThingsBoard MQTT port (default: 1883)")
     parser.add_argument("--token", default=os.getenv("THINGSBOARD_TOKEN", "6EzRR6gcTvnOcgVF53hP"),
                         help="ThingsBoard Device Access Token (default: 6EzRR6gcTvnOcgVF53hP)")
-    parser.add_argument("--gateway-token", default=os.getenv("GATEWAY_TOKEN", "GATEWAY_SECRET_TOKEN"),
-                        help="ThingsBoard Gateway Access Token (default: GATEWAY_SECRET_TOKEN)")
+    parser.add_argument("--gateway-token", default=os.getenv("GATEWAY_TOKEN") or os.getenv("GW_TOKEN") or None,
+                        help="ThingsBoard Gateway device token (default: UDP beacon token, else GATEWAY_SECRET_TOKEN)")
     parser.add_argument("--beacon-port", type=int, default=int(os.getenv("BEACON_PORT", "50051")),
                         help="UDP Beacon port for automatic ThingsBoard discovery (default: 50051)")
     parser.add_argument("--fallback-host", default=os.getenv("THINGSBOARD_FALLBACK_HOST", "127.0.0.1"),
                         help="Fallback IP if UDP beacon discovery times out (default: 127.0.0.1)")
-    parser.add_argument("--serial-port", default=os.getenv("SERIAL_PORT", "auto"),
+    parser.add_argument("--serial-port", default=os.getenv("SERIAL_PORT") or os.getenv("VAULT_PORT") or "auto",
                         help="Serial port for YoloUNO (default: auto)")
     parser.add_argument("--baudrate", type=int, default=int(os.getenv("SERIAL_BAUDRATE", "115200")),
                         help="Serial baudrate (default: 115200)")

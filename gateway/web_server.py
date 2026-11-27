@@ -551,17 +551,35 @@ HTML_PAGE = """<!DOCTYPE html>
 """
 
 
+PIN_PATTERN = re.compile(r'("new_pin"\s*:\s*")[^"]*(")')
+
+
 class LogCaptureTee:
-    """Tees stdout so lines are displayed on terminal AND streamed live to connected browsers."""
-    def __init__(self, original_stdout, maxlen=2000):
+    """Tees stdout so lines are displayed on terminal AND streamed live to connected browsers.
+    Lines sent to browsers are redacted: tokens / chat IDs returned by `secrets_provider`
+    and PIN codes are masked (the web console is reachable from the LAN)."""
+    def __init__(self, original_stdout, maxlen=2000, secrets_provider=None):
         self.original_stdout = original_stdout
         self.buffer = collections.deque(maxlen=maxlen)
+        self.secrets_provider = secrets_provider
+
+    def redact(self, text):
+        text = PIN_PATTERN.sub(r"\1****\2", text)
+        if self.secrets_provider:
+            try:
+                for secret in self.secrets_provider():
+                    secret = str(secret)
+                    if secret and secret in text:
+                        text = text.replace(secret, secret[:4] + "…")
+            except Exception:
+                pass
+        return text
 
     def write(self, s):
         self.original_stdout.write(s)
         if s.strip():
             # Strip ANSI color codes (both real escape byte and literal escapes)
-            clean = re.sub(r'(\x1b|\\033|\\\\033)\[[0-9;]*[a-zA-Z]', '', s).strip()
+            clean = self.redact(re.sub(r'(\x1b|\\033|\\\\033)\[[0-9;]*[a-zA-Z]', '', s).strip())
             if clean:
                 for line in clean.splitlines():
                     trimmed = line.strip()
@@ -756,7 +774,8 @@ def start_local_web_server(gateway_instance, port=5000):
     Returns (server_thread, log_tee).
     """
     # 2000 lines history buffer
-    log_tee = LogCaptureTee(sys.stdout, maxlen=2000)
+    log_tee = LogCaptureTee(sys.stdout, maxlen=2000,
+                            secrets_provider=getattr(gateway_instance, "secrets", None))
     sys.stdout = log_tee
 
     handler_class = make_handler(gateway_instance, log_tee)
