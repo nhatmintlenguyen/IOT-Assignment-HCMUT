@@ -31,7 +31,7 @@ flowchart TB
             end
 
             DHT20 <-->|"I2C 0x38"| Vault
-            LCD <-->|"I2C 0x21/0x27"| Vault
+            LCD <-->|"I2C 0x21"| Vault
             LDR -->|"ADC"| Vault
             Sonar <-->|"GPIO"| Vault
             IR -->|"NEC 38kHz"| Vault

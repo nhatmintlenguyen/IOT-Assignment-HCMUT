@@ -11,7 +11,7 @@ This document details all physical hardware components provided in the **OhStem 
 | Device | Chipset & Technical Features | Project Functional Role |
 | :--- | :--- | :--- |
 | **YoloUNO** | **ESP32-S3 Dual-Core Xtensa LX7 @ 240 MHz**<br>• 512 KB SRAM, 8 MB Flash<br>• Wi-Fi 2.4 GHz (802.11 b/g/n) + BLE 5.0<br>• Arduino Uno R3 form factor with **12 onboard Grove connectors**<br>• 4 dedicated GVS servo headers, native USB Type-C, 7–12V DC power jack | **Central Vault Controller (Vault Unit)**: Sensor acquisition, access authentication, deadbolt servo actuation, FreeRTOS scheduler, and serial Gateway communication. |
-| **Yolo:Bit** | **ESP32 Dual-Core**<br>• 5×5 programmable RGB LED Matrix (25 addressable pixels)<br>• 2 tactile pushbuttons (Button A and B)<br>• Integrated piezoelectric buzzer<br>• 3-axis accelerometer / gyroscope<br>• Powered via 2× AAA battery pack (3V) or USB Type-C | **Wearable Security Badge**: Wireless access requests via ESP-NOW (Button A) or silent duress / panic alarms (Button B), with real-time audio and visual status feedback. |
+| **Yolo:Bit** | **ESP32 Dual-Core**<br>• 5×5 programmable RGB LED Matrix (25 addressable pixels)<br>• 2 tactile pushbuttons (Button A and B)<br>• Integrated piezoelectric buzzer<br>• 3-axis accelerometer / gyroscope<br>• Powered via USB Type-C | **Wearable Security Badge** (ESP-NOW): Button A short = unlock request, Button A long (≥ 1 s) = acknowledge breach, Button B = lock request (also acknowledges an active breach), A+B together short = simulated rogue badge, A+B held ≥ 1.5 s = pairing request. Real-time 5×5 matrix and buzzer feedback. The accelerometer is not used. |
 
 #### YoloUNO Grove slot rows
 
@@ -49,10 +49,10 @@ are not part of these three Grove rows.
 | Module | Interface | Role in Secure Vault | Status |
 | :--- | :--- | :--- | :---: |
 | **Servo Motor (MG90 / SG90)** | **PWM (50 Hz)** — Dedicated GVS Port | Mechanical door deadbolt mechanism (0° = Unlocked, 180° = Locked). | **Selected** |
-| **1602 LCD Display (PCF8574)** | **I2C** (Address `0x27` / `0x3F`) — Grove I2C Port | Local physical user interface (prompts, masked PIN input `* * * *`, status codes). | **Selected** |
-| **Onboard NeoPixel RGB LED** | **GPIO 45** (Internal 1-Wire bus) | Visual status beacon: **Green** (Unlocked), **Blue** (PIN Entry), **Red** (Locked / Alarm). | **Selected** |
+| **1602 LCD Display (PCF8574)** | **I2C** (Address `0x21`, set in `lcd_display.cpp`) — Grove I2C Port | Local physical user interface (prompts, masked PIN input `* * * *`, status codes). | **Selected** |
+| **Onboard NeoPixel RGB LED** | **GPIO 45** (Internal 1-Wire bus) | Visual status beacon, by priority: **cyan strobe** (pairing window), **red strobe** (breach), **solid magenta** (lockdown), **green** (unlocked), **yellow blink** (DHT20 fault); when locked, colour follows temperature: **blue** < 20 °C, **cyan** 20–35 °C, **red** ≥ 35 °C. | **Selected** |
 | **Onboard Heartbeat LED** | **GPIO 48** (D13 internal line) | 1 Hz periodic toggle indicating FreeRTOS task scheduler health. | **Selected** |
-| **IR Remote Control** | Wireless NEC protocol (38 kHz) | Handheld numeric keypad (keys 0–9) for secondary manual PIN entry. | **Selected** |
+| **IR Remote Control** | Wireless NEC protocol (38 kHz) | Handheld keypad: PIN entry (0–9, C = validate), breach acknowledgment (B), pairing (E), manual lock (F), PIN change (Settings). See §4. | **Selected** |
 | **2-Channel Relay Module** | Digital / USB (Optocoupled isolation) | Available to drive external high-voltage electronic maglocks (12V) or sirens. | *Spare / Optional* |
 | **4-LED NeoPixel Grove Bar** | 1-Wire Digital | Additional visual lighting strip if auxiliary signaling is needed. | *Spare / Optional* |
 | **Mini Fan & Submersible Pump** | PWM / Digital | Active ventilation or liquid dispensing. | *Not Used* |
@@ -94,7 +94,7 @@ are not part of these three Grove rows.
 * **On the YoloUNO Board:**
   * The board features **12 keyed Grove connectors** and **4 dedicated 3-pin GVS headers**.
   * Every peripheral utilizes a secure, keyed latching cable.
-  * There are **zero pin collisions** (I2C peripherals share the bus under distinct hardware addresses `0x38` and `0x27`, the LDR utilizes the analog `A1-A0` Grove port, the Ultrasonic sensor utilizes the digital `D4-D3` Grove port, the IR receiver utilizes the digital `D6-D5` Grove port, and the servo uses GVS signal `D11`).
+  * There are **zero pin collisions** (I2C peripherals share the bus under distinct hardware addresses `0x38` (DHT20) and `0x21` (LCD), the LDR utilizes the analog `A1-A0` Grove port, the Ultrasonic sensor utilizes the digital `D4-D3` Grove port, the IR receiver utilizes the digital `D6-D5` Grove port, and the servo uses GVS signal `D11`).
 * **Verdict:** The planned peripheral count is **fully feasible, stable, and clean**. It provides an impressive physical setup with zero risk of loose wires during presentation.
 
 ---
@@ -106,7 +106,7 @@ are not part of these three Grove rows.
                     |             YoloUNO Microcontroller (ESP32-S3)         |
                     |                                                        |
 [Grove Red I2C 1]   --->  DHT20 Climate Sensor (I2C Address 0x38)            |
-[Grove Red I2C 2]   --->  1602 LCD Display (I2C Address 0x21 / 0x27)         |
+[Grove Red I2C 2]   --->  1602 LCD Display (I2C Address 0x21)                |
                     |                                                        |
 [Grove White D4-D3] --->  Ultrasonic Proximity Sensor                        |
                     |      - Yellow (Pin 1): Trigger (D3 / GPIO 6)           |
@@ -130,7 +130,7 @@ are not part of these three Grove rows.
 | Peripheral | YoloUNO Port Type | Physical Connector | Address / Signal Pin |
 | :--- | :--- | :--- | :--- |
 | **DHT20 Climate Sensor** | Grove I2C | Grove Port I2C #1 | I2C Bus (`0x38`), SDA=GPIO 11, SCL=GPIO 12 |
-| **1602 LCD Display** | Grove I2C | Grove Port I2C #2 (or daisy-chained) | I2C Bus (`0x21` / `0x27` / `0x3F`), SDA=GPIO 11, SCL=GPIO 12 |
+| **1602 LCD Display** | Grove I2C | Grove Port I2C #2 (or daisy-chained) | I2C Bus (`0x21`), SDA=GPIO 11, SCL=GPIO 12 |
 | **Light Sensor (LDR)** | Grove Analog | Grove Port A1-A0 | ADC1 Channel (GPIO 1 / A0) |
 | **Ultrasonic Distance Sensor** | Grove Digital | Grove Port D4-D3 | Trig = GPIO 6 (D3), Echo = GPIO 7 (D4) |
 | **IR Receiver (1838)** | Grove Digital | Grove Port D6-D5 | IR Capture Signal = GPIO 8 (D5) |
@@ -144,7 +144,7 @@ are not part of these three Grove rows.
 
 ## 4. Handheld IR Remote Keypad Mapping (NEC Protocol)
 
-The handheld infrared remote communicates using the standard 38 kHz NEC protocol. The mapping table below was captured from real hardware. Programmatic definitions are in [`firmware/vault_yolouno/include/ir_remote_keys.h`](file:///mnt/Data/Documents/Scolarité/6-HCMUT/261/CO3037 - Internet Of Things Development/Assignment/IOT-Assignment-HCMUT/firmware/vault_yolouno/include/ir_remote_keys.h).
+The handheld infrared remote communicates using the standard 38 kHz NEC protocol. The mapping table below was captured from real hardware. Programmatic definitions are in [`firmware/vault_yolouno/include/ir_remote_keys.h`](firmware/vault_yolouno/include/ir_remote_keys.h).
 
 | Remote Button | Command (Hex) | Raw 32-bit Code | Functional Role in Vault System |
 | :---: | :---: | :---: | :--- |
@@ -158,14 +158,16 @@ The handheld infrared remote communicates using the standard 38 kHz NEC protocol
 | **7** | `0x42` | `0xBD42FF00` | Numeric PIN entry digit 7 |
 | **8** | `0x52` | `0xAD52FF00` | Numeric PIN entry digit 8 |
 | **9** | `0x4A` | `0xB54AFF00` | Numeric PIN entry digit 9 |
-| **A** | `0x45` | `0xBA45FF00` | Auxiliary key A |
-| **B** | `0x46` | `0xB946FF00` | Auxiliary key B |
+| **A** | `0x45` | `0xBA45FF00` | Backspace last digit / cancel PIN change |
+| **B** | `0x46` | `0xB946FF00` | **Acknowledge security breach** |
 | **C** | `0x47` | `0xB847FF00` | **Validate / Enter (Submit 4-digit PIN)** |
 | **D** | `0x44` | `0xBB44FF00` | **Clear / Reset current PIN buffer** |
-| **E** | `0x43` | `0xBC43FF00` | Auxiliary key E |
-| **F** | `0x0D` | `0xF20DFF00` | Auxiliary key F |
-| **Up Arrow** | `0x40` | `0xBF40FF00` | Navigation up |
-| **Down Arrow** | `0x19` | `0xE619FF00` | Navigation down |
-| **Left Arrow** | `0x07` | `0xF807FF00` | Navigation left |
-| **Right Arrow** | `0x09` | `0xF609FF00` | Navigation right |
-| **Settings** | `0x15` | `0xEA15FF00` | Configuration / Menu |
+| **E** | `0x43` | `0xBC43FF00` | **Open the 15 s badge pairing window** |
+| **F** | `0x0D` | `0xF20DFF00` | **Manual lock** (when unlocked) |
+| **Up Arrow** | `0x40` | `0xBF40FF00` | Wake LCD / extend standby |
+| **Down Arrow** | `0x19` | `0xE619FF00` | Wake LCD / extend standby |
+| **Left Arrow** | `0x07` | `0xF807FF00` | Wake LCD / extend standby |
+| **Right Arrow** | `0x09` | `0xF609FF00` | Wake LCD / extend standby |
+| **Settings** | `0x15` | `0xEA15FF00` | Change PIN (C = yes, A = cancel; new PIN kept in RAM until reboot) |
+
+When the vault is locked, no breach is active and nobody is near (distance ≥ 30 cm, no standby window), every IR key is rejected with `ACCESS DENIED / Approach first`.

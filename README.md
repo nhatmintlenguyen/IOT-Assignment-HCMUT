@@ -19,16 +19,16 @@ The table below maps the official CO3037 course evaluation rubric elements (**T0
 
 | Technology Code (TE / N) | TE Description (Official HCMUT Rubric) | Implementation & Response in Smart Safe Guardian |
 | :--- | :--- | :--- |
-| **T06** (1.5 pts) | **Wireless communication using ESP-NOW** | Peer-to-peer 2.4 GHz bidirectional communication between the **Yolo:Bit wearable badge (ESP32)** and the **YoloUNO vault controller (ESP32-S3)**. Implements non-blocking unicast transmissions, NVS-paired MAC address filtering, and multi-state visual feedback (5x5 LED matrix) & acoustic feedback (buzzer) for lock, unlock, rogue badge simulation, and breach acknowledgement. |
+| **T06** (1.5 pts) | **Wireless communication using ESP-NOW** | Peer-to-peer 2.4 GHz bidirectional communication between the **Yolo:Bit wearable badge (ESP32)** and the **YoloUNO vault controller (ESP32-S3)**. Implements unicast request/response frames (unencrypted, `peer.encrypt = false`), MAC whitelisting through a **mandatory pairing procedure at every boot** (see §4.0), and multi-state visual feedback (5x5 LED matrix) & acoustic feedback (buzzer) for lock, unlock, rogue badge simulation, and breach acknowledgement. |
 | **T08** (1.0 pt) | **IoT Gateway implemented on a PC (or Raspberry Pi)** | Python daemon (`gateway/gateway.py`) executing on PC / Raspberry Pi Zero 2W. Bridges bidirectional USB CDC Serial (115200 baud, newline-delimited JSON) to ThingsBoard MQTT (`v1/devices/me/telemetry` and `v1/devices/me/rpc`). Features automatic port resolution (distinguishing YoloUNO from Badge CH340), anti-bounce deduplication, and zero-configuration UDP discovery. |
-| **T09** (1.0 pt) | **AI function running on the local IoT Gateway to analyze data** | Real-time Machine Learning model (**Isolation Forest** via `scikit-learn`) running on sliding temporal windows. Evaluates temperature variations, internal light (LDR), proximity (ultrasonic), door state, failed access attempts, and time-of-day to generate a continuous, normalized `anomaly_score` ($[0.0, 1.0]$) streamed to the cloud dashboard. |
+| **T09** (1.0 pt) | **AI function running on the local IoT Gateway to analyze data** | Two **Isolation Forest** models (`scikit-learn`) evaluate every telemetry frame individually (no temporal window): an *environment model* (time of day, temperature, humidity, door state, internal light, distance, breach flag) and an *access-time model* trained on legitimate openings only. The ML can raise an anomaly **on its own** (e.g. door opened at 03:00 with otherwise normal readings); explicit physical rules add explainable `rule_flags`. Output: `anomaly`, `anomaly_score` ($[0.0, 1.0]$, anomaly $\Leftrightarrow$ score $\ge 0.50$), `ml_score`, `rule_flags`, `anomaly_reason`, streamed to the dashboards. |
 | **T10** (1.0 pt) | **Monitoring and control interface on the local IoT Gateway** | Standalone local operator interface hosted on the Gateway network: an embedded HTTP operator console (`gateway/web_server.py`) running on `http://localhost:5000` with native Server-Sent Events (SSE `/api/stream`), 7 live telemetry cards, 5 hardware control buttons, an interactive serial CLI, and a 2000-line circular log buffer, alongside the containerized ThingsBoard instance on port 8080. Allows offline operators to monitor telemetry, track audit history, and dispatch remote RPC commands without WAN access. |
-| **T11** (1.0 pt) | **Application templates, dashboards, and remote monitoring/control** | Comprehensive 24-column Security Operations Center (SOC) dashboard provisioned via script (`scripts/setup_thingsboard.py`) and exported as [`dashboards/smart_safe_dashboard.json`](file:///mnt/Data/Documents/Scolarité/6-HCMUT/261/CO3037%20-%20Internet%20Of%20Things%20Development/Assignment/IOT-Assignment-HCMUT/dashboards/smart_safe_dashboard.json). Features 8 top status cards (size $3\times3$), a 10-column multi-axis telemetry chart with fixed Y-axes (Light 0–1000 ADC, Distance 0–100 cm, Temp 0–50°C, AI Score 0–1.0), a 7-column Access & Security Audit Log, a 7-column RuleChain Alarms table, and a 5-button bottom control bar (Unlock, Lock, Arm/Clear Lockdown, Ack Breach). |
-| **T12** (1.0 pt) | **Using RuleChain to develop smart features** | ThingsBoard Root RuleChain automation ([`dashboards/smart_safe_rule_chain.json`](file:///mnt/Data/Documents/Scolarité/6-HCMUT/261/CO3037%20-%20Internet%20Of%20Things%20Development/Assignment/IOT-Assignment-HCMUT/dashboards/smart_safe_rule_chain.json)): filters incoming telemetry and events, evaluates physical breach conditions (LDR $> 500$ in locked state), thermal attack vectors ($T > 35.0^\circ\text{C}$), and Isolation Forest AI anomaly scores ($\ge 0.50$) to create `CRITICAL SECURITY_BREACH` alarms, auto-clearing them upon resolution. |
-| **T13** (0.5 pt) | **Sending alert notifications when data exceeds a threshold** | Automated instant push notifications dispatched via **Telegram Bot** ([`@hcmut_iot_bot`](https://t.me/hcmut_iot_bot)): (1) Optical tamper breach alerts (LDR $> 500$ while locked), (2) **Thermal Anomaly - Temperature Alert** state machine (`🔥 HOT` $> 35.0^\circ\text{C}$, `❄️ COLD` $< 20.0^\circ\text{C}$, `✅ NORMAL` return, and startup alert), and (3) Anti-bruteforce lockout warnings upon 3 consecutive failed attempts. |
-| **T15** (2.0 pts) | **IoT Gateway synchronized with local IoT Gateway** | Bi-directional synchronization between the physical microcontroller nodes and the ThingsBoard platform: periodic gateway health heartbeats, link quality tracking, automatic state alignment, and transparent routing of cloud RPCs down to microcontrollers. |
-| **N06** (1.0 pt - Bonus) | **Custom-designed dashboard able to detect and record events** | Custom-engineered `Access & Security Audit Log` widget with strict binary door states (`LOCKED` / `UNLOCKED`), semantic event classification (`ROGUE BADGE REJECTED`, `PIN Access Denied`, `EMERGENCY LOCKDOWN ARMED`), sliding-window deduplication, and paginated audit traceability. |
-| **N07** (1.0 pt - Bonus) | **Self-deployed ThingsBoard on a local machine** | Fully containerized ThingsBoard Community Edition (v3.8) running on a local Docker stack with PostgreSQL persistence, 1-click automated provisioning (`scripts/setup_thingsboard.py`), and background UDP broadcast beacon for zero-config local discovery. |
+| **T11** (1.0 pt) | **Application templates, dashboards, and remote monitoring/control** | Comprehensive 24-column Security Operations Center (SOC) dashboard provisioned via script (`scripts/setup_thingsboard.py`) and exported as [`dashboards/smart_safe_dashboard.json`](dashboards/smart_safe_dashboard.json). Features 8 top status cards (size $3\times3$), a 10-column multi-axis telemetry chart with fixed Y-axes (Light 0–1000 ADC, Distance 0–100 cm, Temp 0–50°C, AI Score 0–1.0), a 7-column Access & Security Audit Log, a 7-column RuleChain Alarms table, and a 5-button bottom control bar (Unlock, Lock, Arm/Clear Lockdown, Ack Breach). |
+| **T12** (1.0 pt) | **Using RuleChain to develop smart features** | ThingsBoard RuleChain automation ([`dashboards/smart_safe_rule_chain.json`](dashboards/smart_safe_rule_chain.json)): filters incoming telemetry and events, evaluates physical breach conditions (LDR $> 500$ in locked state), thermal attack vectors ($T > 35.0^\circ\text{C}$), and Isolation Forest AI anomaly scores ($\ge 0.50$) to create `CRITICAL SECURITY_BREACH` alarms, auto-clearing them upon resolution or acknowledgment. The provisioning script injects these nodes into the tenant's root rule chain; the exported JSON must be set as root (or assigned to the device profile) after import. |
+| **T13** (0.5 pt) | **Sending alert notifications when data exceeds a threshold** | Instant push notifications dispatched **by the local Gateway** (`gateway/gateway.py`) via the **Telegram Bot API** ([`@hcmut_iot_bot`](https://t.me/hcmut_iot_bot)) — the RuleChain itself raises dashboard alarms but contains no notification node: (1) Optical tamper breach alerts (LDR $> 500$ while locked), (2) **Thermal Anomaly - Temperature Alert** state machine (`🔥 HOT` $> 35.0^\circ\text{C}$, `❄️ COLD` $< 20.0^\circ\text{C}$, `✅ NORMAL` return, and startup alert), and (3) Anti-bruteforce lockout warnings upon 3 consecutive failed attempts. |
+| **T15** (2.0 pts) | **IoT Gateway synchronized with local IoT Gateway** | The local Gateway is connected simultaneously to the self-hosted ThingsBoard and to CoreIOT (`v1/devices/me/telemetry`, `v1/devices/me/rpc`): the same telemetry and audit events are published to both, RPCs are accepted from both and routed to the YoloUNO, and a bounded **store-and-forward buffer** keeps CoreIOT telemetry with its original timestamp while the cloud link is down and replays it on reconnection. A `Smart Safe Gateway` device (gateway flag) receives a heartbeat on the local instance. The ThingsBoard Gateway API (`v1/gateway/*`, sub-devices) is **not** used. |
+| **N06** (1.0 pt - Bonus) | **Custom-designed dashboard able to detect and record events** | Custom-designed dashboard with an `Access & Security Audit Log` (ThingsBoard time-series table configured with a custom cell-style function) fed by events that the Gateway detects and classifies (`Rogue Badge Rejected`, `PIN Access Denied`, `Emergency Lockdown Armed`, …) with strict binary door states (`LOCKED` / `UNLOCKED`), 1.5 s duplicate suppression and paginated history. |
+| **N07** (1.0 pt - Bonus) | **Self-deployed ThingsBoard on a local machine** | Fully containerized ThingsBoard Community Edition (`thingsboard/tb-node:4.3.1.8`) running on a local Docker stack with PostgreSQL 18 persistence, 1-click automated provisioning (`scripts/setup_thingsboard.py`), and background UDP broadcast beacon for zero-config local discovery. |
 
 > **Score Summary**:
 > * **Technology Elements (T)**: $\sum = 9.0 \text{ pts} \rightarrow$ **Capped at 8.0 / 8.0 pts max**.
@@ -39,7 +39,7 @@ The table below maps the official CO3037 course evaluation rubric elements (**T0
 
 ## 2. Hardware Architecture & Interfaces
 
-For detailed specifications, electrical ratings, voltage compatibility, and anti-brownout recommendations, consult [`HARDWARE.md`](file:///home/lumerios/Documents/Scolarité/6-HCMUT/261/CO3037 - Internet Of Things Development/Assignment/IOT-Assignment-HCMUT/HARDWARE.md).
+For detailed specifications, electrical ratings, voltage compatibility, and anti-brownout recommendations, consult [`HARDWARE.md`](HARDWARE.md).
 
 ```
 +--------------------------------------------------------------------------+
@@ -60,7 +60,7 @@ For detailed specifications, electrical ratings, voltage compatibility, and anti
 |                           VAULT UNIT (YoloUNO - ESP32-S3)                |
 |  Inputs (All Grove Plug-and-Play with Non-Blocking I/O):                 |
 |   - DHT20 Temp & Humidity Sensor ------> Grove I2C #1 (Address 0x38)     |
-|   - 1602 LCD Display (PCF8574) --------> Grove I2C #2 (Address 0x21 / 0x27) |
+|   - 1602 LCD Display (PCF8574) --------> Grove I2C #2 (Address 0x21)       |
 |   - LDR Internal Light Sensor ---------> Grove Analog A1-A0 (Signal A0)  |
 |   - Ultrasonic Distance Sensor --------> Grove Digital D4-D3 (Trig D3, Echo D4) |
 |   - IR Receiver Module (1838) ---------> Grove Digital D6-D5 (Signal D5) |
@@ -84,6 +84,7 @@ For detailed specifications, electrical ratings, voltage compatibility, and anti
 |  - Edge AI Engine (T09): Scikit-Learn Isolation Forest (Anomaly scoring) |
 |  - Local Operator Console (T10): Embedded Web UI (HTTP :5000, SSE Live)   |
 |  - Local Cloud Failover (N07): Containerized ThingsBoard Community CE     |
+|  - Telegram Bot (T13): threshold & intrusion alerts, remote commands      |
 +--------------------------------------------------------------------------+
                                      |
                                      | MQTT over TCP/IP (v1/devices/me)
@@ -92,7 +93,7 @@ For detailed specifications, electrical ratings, voltage compatibility, and anti
 |                       CLOUD PLATFORM (CoreIOT Platform)                  |
 |  - Dashboards & Telemetry Graphs (T11)                                   |
 |  - RuleChain Automated Threshold Logic (T12)                             |
-|  - Real-Time Telegram Alarm Webhooks (T13)                               |
+|  - RuleChain CRITICAL alarms shown in the Alarms widget (T12)           |
 |  - Remote Administrative RPC Lock/Unlock Triggers (T11)                  |
 +--------------------------------------------------------------------------+
 ```
@@ -108,10 +109,10 @@ For detailed specifications, electrical ratings, voltage compatibility, and anti
    * **WAN Transport**: **MQTT** (`v1/devices/me/telemetry` & `v1/devices/me/rpc`) over TCP/IP to CoreIOT and the local ThingsBoard broker.
 3. **Gateway & Edge Processing Layer**:
    * Python-based Gateway daemon parsing serial frames and maintaining connection state.
-   * Local machine learning inference engine executing a **Scikit-Learn Isolation Forest** on sliding telemetry windows to detect multi-variable anomalies.
+   * Local machine learning inference engine executing **Scikit-Learn Isolation Forest** models on every telemetry frame (one frame at a time) to detect multi-variable anomalies.
 4. **Cloud / Middleware Layer (CoreIOT + Local Docker ThingsBoard)**:
-   * **CoreIOT Platform**: Long-term time-series storage, administrative supervisory dashboard, and RuleChain alerting (Telegram bot webhooks).
-   * **Local ThingsBoard Engine (`N07`)**: Containerized instance on `localhost:8080 / 1883` receiving mirrored telemetry to guarantee zero data loss during Internet outages.
+   * **CoreIOT Platform**: Long-term time-series storage, administrative supervisory dashboard, and RuleChain alarms (Telegram alerts are sent by the Gateway).
+   * **Local ThingsBoard Engine (`N07`)**: Containerized instance on `localhost:8080 / 1883` receiving the same telemetry, so local supervision keeps working during Internet outages (CoreIOT telemetry is buffered and replayed on reconnection, up to `COREIOT_BUFFER_SIZE` frames, default 5000 ≈ 2.8 h).
 5. **Application / Business Layer**:
    * Real-time access auditing, automated tamper alerting, and compliance logging for hazardous storage.
 
@@ -122,7 +123,7 @@ For detailed specifications, electrical ratings, voltage compatibility, and anti
 ```
                           +-------------------+
                           |    IDLE / SLEEP   |
-                          | (Door Locked, Red)|
+                          | (Door Locked)     |
                           +---------+---------+
                                     |
                     Ultrasonic Distance < 30 cm
@@ -145,8 +146,8 @@ For detailed specifications, electrical ratings, voltage compatibility, and anti
                     v                               v
         +-----------------------+       +-----------------------+
         |     ACCESS GRANTED    |       |     ACCESS DENIED     |
-        | - Servo rotates to 0° |       | - NeoPixel Flashes Red|
-        | - NeoPixel turns Green|       | - LCD: "Invalid Code" |
+        | - Servo rotates to 0° |       | - LCD: PIN INCORRECT  |
+        | - NeoPixel turns Green|       | - Badge: red cross    |
         | - LCD: "Unlocked"     |       | - Strike count +1     |
         | - Timer: 30s wait     |       +-----------------------+
         +-----------+-----------+
@@ -157,10 +158,18 @@ For detailed specifications, electrical ratings, voltage compatibility, and anti
           (Return to IDLE / Lock)
 ```
 
+### 4.0 Mandatory Badge Pairing (at every boot)
+Neither board keeps the pairing after a reboot (both clear their NVS pairing cache at startup), so the badge must be paired each time the vault or the badge restarts:
+1. Open a **15 s pairing window** on the vault: press the YoloUNO **BOOT** button, or IR key **E** (requires presence < 30 cm), or send `pair` on the serial console. LCD shows `[PAIRING MODE]`, NeoPixel strobes cyan.
+2. On the Yolo:Bit, press **A and B simultaneously and hold ≥ 1.5 s** (a beep and a cyan dot confirm), then release: the badge broadcasts `PAIR_REQ`.
+3. The vault stores the badge MAC (`BADGE PAIRED!`), the badge shows a green check then a blue padlock.
+
+⚠️ Until a badge is paired, any badge command is rejected **and counted as a failed attempt** (3 failures → lockdown). Pressing A then B one after the other (not simultaneously) sends `FAKE_BADGE` instead of a pairing request.
+
 ### 4.1 Wearable Smart Badge Access (ESP-NOW - `T06`)
 1. **Approach Detection**: An approaching operator enters the detection cone (< 30 cm) of the ultrasonic sensor. The LCD wakes up from its cycling telemetry and displays: `"WELCOME / Badge or IR PIN"`.
 2. **Instant Wireless Unlock (Button A Short Press)**:
-   * The Yolo:Bit transmits an encrypted ESP-NOW packet (`"UNLOCK"` with anti-replay sequence counter).
+   * The Yolo:Bit transmits a unicast ESP-NOW frame (`"UNLOCK"` + sequence counter). Frames are **not encrypted** and the counter is only echoed back (no replay protection); the vault authorizes the sender by its paired MAC address.
    * YoloUNO validates proximity: if person is near, deadbolt servo rotates to unlocked position (0°), NeoPixel turns **Solid Green**, and LCD pops up `BADGE / Access Granted` for 1.2s before displaying the live 30s unlock countdown (`DOOR UNLOCKED / F: Lock | 30s`).
    * Yolo:Bit matrix plays a two-stage animation: **Green Checkmark (✔)** (400ms, 1500Hz chime) $\to$ **Green Open Padlock (🔓)** (800ms, 2200Hz chime).
 3. **Manual Lock (Button B Short Press)**:
@@ -176,15 +185,17 @@ For detailed specifications, electrical ratings, voltage compatibility, and anti
 6. **Auto-Relock Safeguard**: After 30 seconds of inactivity, the deadbolt automatically re-engages and logs an `auto_locked` event.
 
 ### 4.2 Backup IR Remote Access & In-Field Management
-1. **PIN Code Entry**: 4-digit numeric code via remote control (default factory PIN: `1234`). Keypresses require physical proximity (< 30 cm); remote attempts from a distance display `ACCESS DENIED / Approach first`.
+1. **PIN Code Entry**: 4-digit numeric code via remote control (default PIN: `1234`; a changed PIN is kept in RAM only and returns to `1234` after a reboot). Keypresses require physical proximity (< 30 cm); remote attempts from a distance display `ACCESS DENIED / Approach first`.
 2. **Full Keypad Mapping**:
    * `0`–`9` : Digit entry with masked feedback (`* * * _`).
    * `A` : Backspace last digit / Cancel prompt.
    * `B` : Clear and acknowledge active security breach alarm (`PIN / IR REMOTE / Breach Acked`).
    * `C` : Validate entered PIN code.
    * `D` : Clear entire PIN buffer.
+   * `E` : Open the 15 s badge pairing window (see §4.0).
    * `F` : Immediate manual lock when door is open.
-   * `▲ / ▼ / ◄ / ►` : Wake LCD display from sleep & extend interaction standby window (metrics auto-scroll every 4s, switching to Welcome screen on proximity).
+   * `▲ / ▼ / ◄ / ►` : Wake the LCD backlight & extend the standby window (pages auto-scroll every 4 s, Welcome screen on proximity).
+   * Settings key (`0x15`) : Change PIN (see below).
 3. **Dynamic PIN Modification (Key 0x15 / Settings)**:
    * Operators can change the safe PIN directly on-device without reflashing firmware.
    * Pressing Key `0x15` launches an interactive state machine:
@@ -199,13 +210,13 @@ For detailed specifications, electrical ratings, voltage compatibility, and anti
   * YoloUNO immediately locks down: deadbolt is forced shut, NeoPixel switches to **Solid Magenta**, and LCD displays `VAULT LOCKDOWN / Access Disabled`.
   * All physical access (IR keypad and smart badges) is strictly suspended.
   * A critical security alarm is broadcast via UART: `{"type":"alarm","alarm":"bruteforce_detected","action":"lockdown_engaged"}`.
-* **Lockdown Recovery**: Lockdown can only be lifted remotely by an administrator via ThingsBoard Cloud / CoreIOT or through the Gateway serial console (`lockdown:0`).
+* **Lockdown Recovery**: The lockdown has **no timeout**. It is lifted by an administrator: dashboard button (local ThingsBoard or CoreIOT), Telegram `/unlockdown`, local web console, or serial `lockdown 0`. Lockdown and breach states are held in RAM (a power cycle of the vault clears them).
 
 ### 4.4 Tamper & Intrusion Detection
 * **Physical Forced Entry**: If the safe door is forced open without prior authentication, the internal LDR optical sensor detects ambient room light while in `LOCKED` state.
-* **Instant Alarm & Latching**: The onboard NeoPixel flashes an aggressive **Strobe Red** (80ms cycle), the LCD displays `SECURITY BREACH / Waiting for ACK`, and an alarm frame is pushed over UART.
+* **Instant Alarm & Latching**: Triggered when the LDR reads **≥ 1200 ADC for 3 consecutive samples (200 ms apart)** while locked. The onboard NeoPixel flashes **Strobe Red** (80 ms cycle), the LCD displays `SECURITY BREACH / Waiting for ACK`, and a `breach` event is pushed over UART. If the door is left physically open when the 30 s auto-relock fires, this also raises a breach.
 * **Tri-Channel Acknowledgment**: The intrusion state remains persistently latched until explicitly acknowledged via:
-  1. Yolo:Bit Badge: Long press Button A (or Button B).
+  1. Yolo:Bit Badge: Long press Button A (≥ 1 s), or short press Button B (LOCK, which acknowledges an active breach).
   2. IR Remote: Key B or authorized PIN entry.
   3. Cloud / Web: ThingsBoard dashboard button / RPC `ack`.
 
@@ -215,32 +226,43 @@ Every interaction on the safe triggers a high-visibility, 1.2-second LCD status 
 * **IR Keypad Actions**: `PIN CODE / Access Granted`, `PIN / IR REMOTE / Breach Acked`, `PIN / IR REMOTE / Vault Locked`.
 * **Remote Cloud Actions**: `WEB / CLOUD / Access Granted`, `WEB / CLOUD / Vault Locked`, `WEB / CLOUD / Breach Acked`, `WEB / CLOUD / Lockdown ON/OFF`.
 
-### 4.5 Edge AI Anomaly Detection (`T09`)
-The Gateway executes an **Isolation Forest** machine learning model (`scikit-learn`) on every incoming telemetry frame to detect physical tampering, environmental attacks, and anomalous access vectors in real time.
+### 4.6 Edge AI Anomaly Detection (`T09`)
+The Gateway evaluates every incoming telemetry frame (one frame at a time, no temporal window) with two **Isolation Forest** models (`scikit-learn`, `n_estimators=100`) plus explicit physical rules.
 
-* **Mathematical Principle**: Isolation Forest builds 100 randomized decision trees (`n_estimators=100`, `contamination=0.02`). Anomalous multi-variable vectors are structurally isolated near the root of the trees (short average path length $h(x)$), whereas nominal operating states require deep partition splits.
-* **7-Dimensional Input Vector ($X$)**:
-  1. `hour` (0–23): Time of day (flags unauthorized nocturnal access attempts).
-  2. `temp` (°C): Ambient DHT20 temperature.
-  3. `hum` (%): Ambient DHT20 relative humidity.
-  4. `is_unlocked` (0 = `LOCKED`, 1 = `UNLOCKED`): Binary physical door lock state.
-  5. `light_adc` (0–4095): Internal optical enclosure sensor (LDR).
-  6. `distance_cm` (cm): Ultrasonic proximity radar (HC-SR04).
-  7. `is_breach` (0/1): Hardware tamper alarm flag.
-* **Feature Normalization**: Centered and scaled via `StandardScaler()` so high-magnitude readings (e.g. ADC 0–4095) do not skew continuous temperature or distance values.
-* **Domain Security Rules & Penalties**:
-  - **Optical Drill Breach**: Internal light detected ($> 700$ ADC) while door is locked ($+0.80$ penalty).
-  - **Thermal Attack Vector**: High heat torch ($T > 36^\circ\text{C}$) or cryogenic liquid nitrogen tamper ($T < 14^\circ\text{C}$).
-  - **Moisture Flooding**: Humidity exceeds $85\%$.
-* **Scoring & Real-Time Output**: Computes a continuous normalized score ($[0.0, 1.0]$) streamed to ThingsBoard. If $\text{score} \ge 0.50$, an anomaly alert is raised with structured diagnosis (`anomaly_reason`).
-* **Empirical Performance**: **96.68% accuracy**, 100.00% precision (0 false alarms on normal baseline), **9.52 ms** edge inference latency (measured over 1,000 trials).
-* **Real-World Calibration Protocol**: Features a zero-shot synthetic baseline for immediate cold-start operation; can be re-fitted on real sensor CSV telemetry (`.joblib` persistence) to adapt to laboratory ambient temperature and the physical light-tightness of the safe enclosure.
+* **Principle**: Isolation Forest isolates samples with random axis-aligned splits; outliers need few splits (short path length $h(x)$). Values outside the training range are scored like the most extreme training points, so the baseline uses bell-shaped (sparse-tailed) distributions.
+* **Environment model** (`contamination=0.02`) — 7-dimensional input vector $X$:
+  1. `hour` (fractional hour of the Gateway clock, e.g. 14.5 = 14:30)
+  2. `temp` (°C) and 3. `hum` (%) — DHT20
+  4. `is_unlocked` (0 = `LOCKED`, 1 = `UNLOCKED`)
+  5. `light_adc` (0–4095) — internal LDR
+  6. `distance_cm` — ultrasonic sensor
+  7. `is_breach` (0/1) — firmware tamper flag
+* **Access-time model** (`contamination=0.01`): trained on legitimate unlocked frames only (opening time ~ $\mathcal{N}(13.5\,h, 2.5\,h)$ truncated to 08:00–20:00). It flags a door opened before ~08:00 or after ~19:30.
+* **Training data**: synthetic baseline of 4000 normal frames (80 % locked at any hour, 20 % legitimate accesses), regenerated in ~1 s at every Gateway start. Nothing is persisted to disk; the models are not trained on recorded sensor data.
+* **Feature normalization**: `StandardScaler()`.
+* **Rule flags** (explainable, each one is an anomaly by itself): `BREACH_FLAG`, `LIGHT_WHILE_LOCKED` (> 700 ADC), `THERMAL_HOT` (> 35 °C), `THERMAL_COLD` (< 14 °C), `HUMIDITY_HIGH` (> 85 %).
+* **Scores**: `ml_score` maps the Isolation Forest decision function to $[0, 1]$ with the decision boundary at 0.50; `anomaly_score = max(ml_score, rule score)`; `anomaly` $\Leftrightarrow$ `anomaly_score` $\ge 0.50$ (same threshold as the RuleChain).
+* **Evaluation** (`make benchmark`, synthetic test set of 2500 frames: 2000 normal + 500 attack vectors, seed 101): see §8.6 for the exact figures. The test set is synthetic and generated with assumptions close to the training baseline, so these numbers measure consistency, not field performance. The *loitering* vector (person < 9 cm, door locked) is **not detected** by the current model.
 
-### 4.6 Dual Cloud / Offline Redundancy (`N07`)
+### 4.7 Dual Platform Publishing & Offline Buffer (`N07`, `T15`)
 * The Gateway Python application publishes MQTT packets simultaneously to:
   1. `app.coreiot.io:1883` (Primary Cloud Dashboard).
-  2. `localhost:1883` (Local ThingsBoard Docker Container).
-* If the lab Wi-Fi drops, the local ThingsBoard continues recording data without interruption.
+  2. The local ThingsBoard Docker container (`THINGSBOARD_HOST`, default auto-discovered via UDP beacon).
+* If the Internet link drops, the local ThingsBoard keeps recording (Gateway and Docker host on the same LAN). Telemetry destined for CoreIOT is kept in a bounded in-memory buffer (`COREIOT_BUFFER_SIZE`, default 5000 frames) with its original timestamp (`{"ts": …, "values": …}`) and replayed in order when the connection returns. The buffer is lost if the Gateway process restarts.
+
+### 4.8 Multi-Level Thresholds (why the values differ)
+The layers deliberately use different thresholds: the cloud warns early, the AI scores the risk, and the firmware only latches a hardware alarm on a strong, confirmed signal.
+
+| Signal | Level 1 — Cloud early warning (RuleChain, CoreIOT / local TB) | Level 2 — AI rule flag (Gateway) | Level 3 — Hardware latch (YoloUNO firmware) | Telegram (Gateway) |
+| :--- | :--- | :--- | :--- | :--- |
+| Internal light, door **locked** | `light_adc > 500` → `CRITICAL SECURITY_BREACH` alarm | `> 700` ADC → `LIGHT_WHILE_LOCKED` | `≥ 1200` ADC on **3 consecutive samples** (200 ms) → latched breach (reset of the sample counter below `800`) | on the firmware `breach` event |
+| High temperature | `temp > 35.0 °C` → alarm | `> 35.0 °C` → `THERMAL_HOT` | — | `> 35.0 °C` HOT, back to NORMAL at `≤ 33.5 °C` |
+| Low temperature | alarm cleared only within 20–35 °C | `< 14.0 °C` → `THERMAL_COLD` | — | `< 20.0 °C` COLD, back to NORMAL at `≥ 21.0 °C` |
+| Humidity | — | `> 85 %` → `HUMIDITY_HIGH` | — | — |
+| AI score | `anomaly_score ≥ 0.50` → alarm | anomaly ⇔ `anomaly_score ≥ 0.50` | — | — |
+| Failed authentications | — | — | 3 consecutive → lockdown (no timeout) | on the firmware `bruteforce_detected` alarm |
+
+Consequence: a light level between 500 and 1199 ADC with the door locked raises a cloud alarm (and an AI flag above 700) without latching the hardware breach, so no Telegram breach alert is sent and the vault LED does not strobe.
 
 ---
 
@@ -252,7 +274,7 @@ The Gateway executes an **Isolation Forest** machine learning model (`scikit-lea
 | **Group 4: Local Gateway** | **`T08`**: Gateway on PC aggregating serial data, publishing to CoreIOT, managing RPC<br>**`T09`**: Gateway AI anomaly detection using Scikit-Learn Isolation Forest<br>**`T10`**: Local embedded operator web console on Gateway (HTTP :5000, SSE stream) | **1.0 / 1.0**<br>**1.0 / 1.0**<br>**1.0 / 1.0** |
 | **Group 5: CoreIOT Platform** | **`T11`**: CoreIOT Dashboards with telemetry gauges and remote RPC unlock switches<br>**`T12`**: RuleChain automated logic for breach and climate threshold detection<br>**`T13`**: Telegram alarm notification on intrusion<br>**`T15`**: IoT Gateway on CoreIOT synchronized with local Gateway (bidirectional RPC & state) | **1.0 / 1.0**<br>**1.0 / 1.0**<br>**0.5 / 0.5**<br>**2.0 / 2.0** |
 | **Technology Subtotal** | *Raw points: 9.0 points* $\rightarrow$ **Capped at Maximum** | **8.0 / 8.0** |
-| **Official Report** | 6-chapter structure (`IoTReport_Template.docx`), self-assessment & task assignment tables, $\ge 5$ academic references | **2.0 / 2.0** |
+| **Official Report** | 6-chapter structure (course report template), self-assessment & task assignment tables, $\ge 5$ academic references | **2.0 / 2.0** |
 | **Advanced Bonus** | **`N07`**: Self-deployed local ThingsBoard instance via Docker (`docker-compose.yml`) | **1.0 / 1.0** |
 | **Grand Total** | $\min(8.0, \sum \text{Tech}) + \text{Report} + \min(1.0, \sum \text{Bonus})$ | **10.0 / 10.0** |
 
@@ -279,7 +301,7 @@ The Gateway executes an **Isolation Forest** machine learning model (`scikit-lea
 
 [Phase 3: CoreIOT & Integration]
   ├── Configure CoreIOT telemetry widgets, status cards, and RPC buttons
-  ├── Set up RuleChain for Telegram bot breach notifications
+  ├── Set up RuleChain alarms (Telegram notifications are sent by the Gateway)
   └── Collect evaluation metrics and record demo video
 ```
 
@@ -287,13 +309,16 @@ The Gateway executes an **Isolation Forest** machine learning model (`scikit-lea
 
 ## 7. Local ThingsBoard CE Deployment (Docker - `N07`)
 
-The project includes a production-ready, local ThingsBoard Community Edition (v4.3) environment backed by PostgreSQL 18.
+The project includes a local ThingsBoard Community Edition environment (`thingsboard/tb-node:4.3.1.8`, overridable with `TB_VERSION`) backed by PostgreSQL 18.
 
 ### 7.1 Quickstart Commands
 
 ```bash
-# First-time initialization (creates PostgreSQL DB schema and starts services):
-make init
+# First-time full setup (DB schema + start + provisioning of tenant, devices,
+# dashboard and rule chain via scripts/setup_thingsboard.py + discovery beacon):
+make init-all
+
+# (Equivalent step by step: `make init` then `make setup-thingsboard`)
 
 # Standard startup (subsequent runs):
 make up
@@ -309,12 +334,13 @@ make down
 
 * **Web UI URL**: [http://localhost:8080](http://localhost:8080)
 * **MQTT Broker**: `localhost:1883`
-* **Pre-configured Accounts**:
-  * **System Administrator**: `sysadmin@thingsboard.org` / `sysadmin`
-  * **Tenant Administrator**: `tenant@thingsboard.org` / `tenant`
-* **Pre-registered Device**:
-  * **Device Name**: `Smart Safe Guardian`
-  * **Device Access Token**: `6EzRR6gcTvnOcgVF53hP`
+* **Accounts** (values from `.env`):
+  * **System Administrator**: `sysadmin@thingsboard.org` / `sysadmin` (ThingsBoard default)
+  * **Tenant Administrator** (created by `setup_thingsboard.py`): `admin@smartsafeguardian.com` / `tenant`
+  * `tenant@thingsboard.org` only exists if the DB was initialized with `make init LOAD_DEMO=true`.
+* **Devices registered by `setup_thingsboard.py`**:
+  * `Smart Safe Guardian` — access token `6EzRR6gcTvnOcgVF53hP` (**local demo token only**, not a CoreIOT credential; change `THINGSBOARD_TOKEN` if the instance is reachable from outside your LAN)
+  * `Smart Safe Gateway` (gateway flag) — token `GATEWAY_SECRET_TOKEN` (heartbeat link)
 
 ### 7.3 Instant Verification (Test Telemetry via curl)
 
@@ -329,7 +355,7 @@ curl -X POST "http://localhost:8080/api/v1/6EzRR6gcTvnOcgVF53hP/telemetry" \
 ## 8. Hardware Flashing & Execution Guide (PlatformIO)
 
 ### 8.1 Prerequisites & PlatformIO Setup
-The PlatformIO Core CLI is symlinked into `~/.local/bin/pio` and directly available in your terminal:
+Install PlatformIO Core if needed (`make install-pio` installs it and links it into `~/.local/bin/pio`), then check:
 ```bash
 pio --version
 # Should output: PlatformIO Core, version 6.2.0 (or higher)
@@ -374,8 +400,8 @@ make run-gateway
 # Verbose / Debug Mode (streams raw serial and MQTT payloads):
 make run-gateway ARGS="--debug"
 
-# Target a manual IP and custom port:
-make run-gateway HOST=192.168.1.50
+# Target a manual IP (and optionally another MQTT port):
+make run-gateway HOST=192.168.1.50 MQTT_PORT=1883
 
 # Direct execution via virtual environment:
 gateway/.venv/bin/python gateway/gateway.py --host auto --debug
@@ -384,7 +410,7 @@ gateway/.venv/bin/python gateway/gateway.py --host auto --debug
 * **Standard Mode**: Displays clean, timestamped human-readable events (`[HH:MM:SS] 🔓 [ACCESS] Door Unlocked via Badge`, `[HH:MM:SS] 📊 [TELEMETRY] ...`, and real-time AI score shifts).
 * **Debug Mode (`--debug` / `-v`)**: Shows full raw incoming USB CDC serial packets (`[DEBUG SERIAL RX]`) and outgoing MQTT telemetry/RPC payloads (`[DEBUG MQTT TX]`).
 
-*Port Auto-detection:* The gateway automatically discovers `/dev/ttyACM*` or `/dev/ttyUSB*` ports. To target a specific port:
+*Port Auto-detection:* The gateway automatically discovers `/dev/ttyACM*` or `/dev/ttyUSB*` ports (`SERIAL_PORT=auto` in `.env`). To target a specific port:
 ```bash
 gateway/.venv/bin/python gateway/gateway.py --serial-port /dev/ttyACM0 --host auto
 ```
@@ -419,28 +445,49 @@ sudo journalctl -u smart-safe-gateway.service -f
 ```
 The script `scripts/rpi_boot_gateway.sh` automatically waits for network, pulls the latest code from `origin/main`, provisions the python environment, and launches the daemon targeting your ThingsBoard server.
 
-### 8.6 Automated System Benchmarks & Metrics (Report Chapter 4)
-Smart Safe Guardian includes an automated performance testing and metrics harness (`scripts/system_benchmark.py`) designed to empirically populate **Table 4.1** of the official HCMUT report:
+### 8.6 Benchmarks, Tests & Metrics (Report Chapter 4)
+`scripts/system_benchmark.py` produces **Table 4.1**. Every row carries a **Source** label and a computed verdict:
 
-1. **Edge AI Anomaly Detection (`T09`)**: Evaluates the *Isolation Forest* against 2,500 samples (2,000 normal, 500 adversarial attack vectors: optical drill, heat torch, cryogenic freeze, flooding, loitering). Computes Confusion Matrix, Precision, Recall, Specificity, F1, and Inference Latency (< 10 ms).
-2. **Gateway Serialization Pipeline (`T08`, `T15`)**: Measures JSON decoding, normalization, and MQTT encoding throughput (frames/sec).
-3. **Remote RPC Execution Round-Trip (`T11`, `T15`)**: Measures full lifecycle latency for `unlock`, `lock`, `lockdown`, and `ack_alarm` commands.
-4. **Telegram Notification Latency (`T13`)**: Tests real HTTP API round-trip dispatch to Telegram servers.
-5. **ESP-NOW RF Reliability (`T06`)**: Analyzes packet delivery ratio (PDR) and effective loss rate with hardware retransmission.
+| Source | Meaning |
+| :--- | :--- |
+| `LIVE` | measured on the physical hardware / real network service |
+| `MEASURED` | measured on the machine running the script (AI model on the synthetic test set) |
+| `SIMULATED` | statistical simulation — **not a measurement**, no PASS/FAIL verdict |
+| `N/A` | not measured in this run |
 
-#### Running the Benchmark Suite:
+| Row | Metric | How it is obtained |
+| :--- | :--- | :--- |
+| 1 | Sensor → dashboard latency | **Not measured** (needs server-side timestamps) → `N/A` |
+| 2 | ESP-NOW packet loss | Monte-Carlo **simulation** (1.2 % raw loss, 3 retries) → `SIMULATED` |
+| 3–4 | AI accuracy (95 % Wilson CI) / inference latency | 2500-frame synthetic test set (2000 normal + 500 attacks), 1000 inference calls → `MEASURED` |
+| 5 | Serial command round-trip (Gateway → YoloUNO → Gateway, USB) | `--live` only, 6 commands → `LIVE` |
+| 6 | Telegram API round-trip | 5 × Bot API `getMe` with a real token → `LIVE`; simulated otherwise |
+
 ```bash
-# Mode A: Software-In-The-Loop (SIL) Simulation (CI / test without hardware):
-make benchmark
-# Or:
-gateway/.venv/bin/python scripts/system_benchmark.py --mock
-
-# Mode B: Live Physical Hardware Testing (when YoloUNO is connected via USB):
-make benchmark ARGS="--live"
-# Or target a specific port:
-gateway/.venv/bin/python scripts/system_benchmark.py --live --port /dev/ttyACM0
+make benchmark                      # no hardware (default)
+make benchmark ARGS="--live"        # YoloUNO connected over USB
+gateway/.venv/bin/python scripts/system_benchmark.py --rebuild docs/benchmarks/pi_benchmark_results.json
 ```
-All measurement results are printed in a clean ASCII table and automatically saved to `docs/benchmark_results.json` for inclusion in the final report.
+Results are written to `docs/benchmarks/benchmark_results.json`. Historical live runs: `docs/benchmarks/laptop_benchmark_results.json` and `pi_benchmark_results.json` (measured with the first AI model, tables re-computed with `--rebuild`; on the Raspberry Pi Zero 2W the AI inference latency of 71.9 ms **fails** the 10 ms target). `docs/benchmarks/benchmark_comparison.py` draws Figure 4.1 from these two files (measured rows only).
+
+**Current AI model — synthetic test set, host laptop (x86_64):**
+
+| Metric | Value |
+| :--- | :--- |
+| Confusion matrix | TP = 417, TN = 1994, FP = 6, FN = 83 |
+| Accuracy | 96.44 % (95 % CI 95.64 – 97.10) |
+| Precision / Recall / F1 | 98.58 % / 83.40 % / 90.36 % |
+| Specificity | 99.70 % |
+| Detected by | rules only 408, ML + rules 9, ML only 6 (= the 6 false positives) |
+| Per attack vector | optical drill 84/84, heat torch 84/84, cryogenic 83/83, flooding 83/83, breach flag 83/83, **loitering 0/83** |
+| ML-only scenario (separate: 100 door openings between 20:30 and 07:00, all other readings normal) | 100/100 detected by the ML alone |
+| Inference latency | ≈ 6 ms mean on the host laptop; not re-measured on the Raspberry Pi |
+
+**Unit tests (no hardware, no network):**
+```bash
+gateway/.venv/bin/python -m unittest discover -s tests -v
+```
+They cover the anomaly detector (ML-only detection, rule flags, score/threshold consistency) and the Gateway offline logic (CoreIOT buffer and replay, `getState` / `getLockdown` RPC, telemetry keys, redaction of tokens and PIN in the web console log).
 
 ---
 
@@ -452,7 +499,7 @@ The IoT Gateway integrates an asynchronous, bidirectional Telegram bot daemon co
 * **Configuration (`.env`):**
   ```ini
   TELEGRAM_TOKEN=your_bot_token_from_botfather
-  TELEGRAM_CHAT_ID=1979409784,1252255798  # Comma-separated list for multi-administrator access
+  TELEGRAM_CHAT_ID=<admin_chat_id_1>,<admin_chat_id_2>  # Comma-separated list for multi-administrator access
   ```
 
 #### 1. Security & Role-Based Access Control (RBAC)
@@ -469,7 +516,7 @@ The IoT Gateway integrates an asynchronous, bidirectional Telegram bot daemon co
 | `/lock` | Remotely commands the servo to lock the vault door | `Door Locked (Telegram by <Name>)` |
 | `/lockdown` | Arms emergency lockdown (forces door locked, ignores physical PINs and badges) | `Emergency Lockdown Armed (Telegram by <Name>)` |
 | `/unlockdown` | Disarms emergency lockdown and restores normal physical access | `Emergency Lockdown Cleared (Telegram by <Name>)` |
-| `/ack` | Acknowledges active security breach siren and silences buzzer | `Breach Alarm Acknowledged (Telegram by <Name>)` |
+| `/ack` | Acknowledges (clears) the latched security breach alarm | `Breach Alarm Acknowledged (Telegram by <Name>)` |
 | `/id` | Displays caller's Chat ID and administrator authorization status | — |
 
 #### 3. Real-Time Push Notifications (T13)
@@ -479,7 +526,7 @@ The IoT Gateway integrates an asynchronous, bidirectional Telegram bot daemon co
   * `❄️ COLD`: Low Temperature Warning ($T < 20.0^\circ\text{C}$, suspected cryogenic freeze tampering).
   * `✅ NORMAL`: Return to nominal temperature range ($20.0^\circ\text{C} - 35.0^\circ\text{C}$) with green checkmark confirmation.
   * `(System Startup)`: Automatically flagged if the vault boots with abnormal thermal readings.
-* **Bruteforce Lockout Alert:** Push alert dispatched when 3 consecutive fraudulent access attempts trigger emergency lockdown.
+* **Bruteforce Lockout Alert:** Push alert dispatched when 3 consecutive failed attempts trigger the emergency lockdown (active until an administrator clears it).
 * **Resolution Clearance:** Instant confirmation dispatched when an authorized operator acknowledges the alarm via Telegram, ThingsBoard dashboard, IR remote, or physical badge.
 
 #### 4. Instant Connectivity Test
@@ -503,10 +550,18 @@ The script automatically executes:
 1. **Tenant & Admin Account Provisioning**: Configures tenant administrator `admin@smartsafeguardian.com`.
 2. **Device Registration**: Registers `Smart Safe Guardian` vault device and `Smart Safe Gateway`.
 3. **24-Column SOC Dashboard Deployment**: Builds and deploys the balanced Security Operations Center layout (8 top KPI status cards, 10-column multi-axis telemetry chart with fixed Y-axes, 7-column Access Audit Log, 7-column Alarms Table, 5 bottom RPC buttons).
-4. **Root RuleChain Automation (T12)**: Injects `Detect Breach & AI Anomaly` (evaluating physical breach, optical LDR $> 500$, thermal attack $> 35.0^\circ\text{C}$, and AI score $\ge 0.50$), `Create Security Alarm` (`CRITICAL SECURITY_BREACH`), and `Check Breach Resolved` $\to$ `Clear Security Alarm`.
+4. **RuleChain Automation (T12)**: Injects into the tenant's root rule chain `Detect Breach & AI Anomaly` (evaluating physical breach, optical LDR $> 500$, thermal attack $> 35.0^\circ\text{C}$, and AI score $\ge 0.50$), `Create Security Alarm` (`CRITICAL SECURITY_BREACH`), and `Check Breach Resolved` $\to$ `Clear Security Alarm`.
 5. **Standalone CoreIOT Artifact Exports**:
-   * [`dashboards/smart_safe_dashboard.json`](file:///mnt/Data/Documents/Scolarité/6-HCMUT/261/CO3037%20-%20Internet%20Of%20Things%20Development/Assignment/IOT-Assignment-HCMUT/dashboards/smart_safe_dashboard.json): Importable in 1 click into CoreIOT Cloud.
-   * [`dashboards/smart_safe_rule_chain.json`](file:///mnt/Data/Documents/Scolarité/6-HCMUT/261/CO3037%20-%20Internet%20Of%20Things%20Development/Assignment/IOT-Assignment-HCMUT/dashboards/smart_safe_rule_chain.json): Standalone Root Rule Chain for CoreIOT Rule Engine import.
+   * [`dashboards/smart_safe_dashboard.json`](dashboards/smart_safe_dashboard.json): Importable into CoreIOT. The entity alias points to the device ID of the instance it was exported from: after import, edit the alias `Smart Safe Guardian` and select your own device.
+   * [`dashboards/smart_safe_rule_chain.json`](dashboards/smart_safe_rule_chain.json): Standalone rule chain for CoreIOT import (set it as root, or assign it to the device profile, after import).
 
+---
 
+## 9. Team & Roles
 
+| Member | GitHub identity | Main responsibilities | Contribution |
+| :--- | :--- | :--- | :--- |
+| Morel (Pierre) Louis | `Louis Morel` (also `Lumerios`, unified in `.mailmap`) | Gateway (`gateway.py`, Telegram bot, CoreIOT link), Edge AI (`anomaly_detector.py`), local web console, ESP-NOW badge firmware, ThingsBoard provisioning / dashboard / RuleChain, benchmarks, documentation | 50 % |
+| Lê Nguyễn Nhật Minh | `nhatminh` | Vault firmware architecture (sensor monitor: DHT20 / LDR / ultrasonic, proximity detection, LCD display, vault state machine), Docker Compose & Makefile base, project proposal | 50 % |
+
+The detailed Task Assignment Table is in the report.

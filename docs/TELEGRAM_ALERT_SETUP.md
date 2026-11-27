@@ -225,6 +225,6 @@ For self-hosted ThingsBoard (`http://localhost:8080`), you can set up the rule c
 | :--- | :--- | :--- | :---: |
 | **1. Bot Healthcheck** | Run `gateway/.venv/bin/python gateway/gateway.py --test-telegram` | "Test message successfully delivered" in terminal and message received on phone. | ✅ |
 | **2. Mock Intrusion Test** | Run `gateway/.venv/bin/python gateway/gateway.py --mock` | Gateway connects and indicates `Telegram Bot Alert: ENABLED`. | ✅ |
-| **3. Hardware Intrusion Test** | Shine flashlight onto internal LDR while vault is in `LOCKED` state. | YoloUNO triggers buzzer/red LED, Gateway displays `[ALARM]`, and Telegram receives alert with live LDR ADC value. | ✅ |
+| **3. Hardware Intrusion Test** | Shine flashlight onto internal LDR while vault is in `LOCKED` state. | YoloUNO NeoPixel strobes red (LDR ≥ 1200 ADC on 3 samples), Gateway displays `[ALARM]`, and Telegram receives alert with live LDR ADC value. | ✅ |
 | **4. Anti-Spam Check** | Keep flashlight on LDR continuously for 15 seconds. | Bot receives exactly **1** notification, not repeated every 2 seconds. | ✅ |
 | **5. Acknowledgment Check** | Hold Button A on Yolo:Bit Badge for $\ge 1\text{s}$ or click "Acknowledge" on Dashboard. | Alarm clears on ThingsBoard and bot receives `ALARM RESOLVED` notice. | ✅ |

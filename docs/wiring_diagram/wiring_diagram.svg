@@ -1,0 +1,220 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1720" height="1060" viewBox="0 0 1720 1060">
+<rect x="0" y="0" width="1720" height="1060" rx="0" fill="#ffffff" stroke="none" stroke-width="1" />
+<text x="40" y="52" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="26" fill="#1b1f24" font-weight="700" text-anchor="start">Smart Safe Guardian — Hardware Wiring Diagram</text>
+<text x="40" y="80" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#56606b" font-weight="400" text-anchor="start">Vault node (YoloUNO · ESP32-S3), wearable badge (Yolo:Bit · ESP32) and edge gateway. All Grove modules run on 3.3 V logic: no level shifter or pull-up needed.</text>
+<text x="40" y="132" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#8a949e" font-weight="700" text-anchor="start">VAULT PERIPHERALS · GROVE CABLES</text>
+<text x="590" y="132" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#8a949e" font-weight="700" text-anchor="start">NODE 1 · CENTRAL VAULT CONTROLLER</text>
+<text x="1180" y="132" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#8a949e" font-weight="700" text-anchor="start">ACTUATOR · GATEWAY · BADGE</text>
+<rect x="590" y="150" width="460" height="700" rx="18" fill="#14344f" stroke="#0b2236" stroke-width="2" />
+<circle cx="612" cy="172" r="7" fill="#0b2236" stroke="#3a5f80" stroke-width="2"/>
+<circle cx="1028" cy="172" r="7" fill="#0b2236" stroke="#3a5f80" stroke-width="2"/>
+<circle cx="612" cy="828" r="7" fill="#0b2236" stroke="#3a5f80" stroke-width="2"/>
+<circle cx="1028" cy="828" r="7" fill="#0b2236" stroke="#3a5f80" stroke-width="2"/>
+<text x="820.0" y="200" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="24" fill="#ffffff" font-weight="700" text-anchor="middle">YoloUNO</text>
+<text x="820.0" y="222" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12.5" fill="#a9c3da" font-weight="400" text-anchor="middle">ESP32-S3 · 240 MHz dual-core · Wi-Fi + BLE 5</text>
+<rect x="740" y="410" width="160" height="150" rx="6" fill="#c7ccd1" stroke="#8d959c" stroke-width="2" />
+<rect x="752" y="422" width="136" height="100" rx="4" fill="#9aa2aa" stroke="none" stroke-width="1" />
+<text x="820.0" y="468" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="15" fill="#1b1f24" font-weight="700" text-anchor="middle">ESP32-S3</text>
+<text x="820.0" y="486" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11" fill="#1b1f24" font-weight="400" text-anchor="middle">WROOM-1</text>
+<path d="M760 546 h20 v-18 h20 v18 h20 v-18 h20 v18 h20 v-18 h20" fill="none" stroke="#6b737b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="820.0" y="578" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11" fill="#a9c3da" font-weight="400" text-anchor="middle">PCB antenna · ESP-NOW ch. 1</text>
+<rect x="860" y="620" width="170" height="40" rx="6" fill="#1d4a6e" stroke="#2e6690" stroke-width="1" />
+<circle cx="882" cy="640" r="10" fill="#22c55e" stroke="#fff" stroke-width="1.5"/>
+<text x="904" y="637" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#ffffff" font-weight="600" text-anchor="start">NeoPixel RGB</text>
+<text x="904" y="652" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#a9c3da" font-weight="400" text-anchor="start">GPIO 45 · 1-Wire</text>
+<rect x="860" y="670" width="170" height="40" rx="6" fill="#1d4a6e" stroke="#2e6690" stroke-width="1" />
+<circle cx="882" cy="690" r="7" fill="#f59e0b"/>
+<text x="904" y="687" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#ffffff" font-weight="600" text-anchor="start">Heartbeat LED</text>
+<text x="904" y="702" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#a9c3da" font-weight="400" text-anchor="start">GPIO 48 · 1 Hz</text>
+<rect x="860" y="720" width="170" height="40" rx="6" fill="#1d4a6e" stroke="#2e6690" stroke-width="1" />
+<rect x="872" y="730" width="20" height="20" rx="3" fill="#d1d5db"/><circle cx="882" cy="740" r="5" fill="#4b5563"/>
+<text x="904" y="737" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#ffffff" font-weight="600" text-anchor="start">BOOT button</text>
+<text x="904" y="752" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#a9c3da" font-weight="400" text-anchor="start">GPIO 0 · pair 15 s</text>
+<rect x="668" y="620" width="170" height="90" rx="6" fill="#1d4a6e" stroke="#2e6690" stroke-width="1" />
+<text x="684" y="642" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#ffffff" font-weight="600" text-anchor="start">Power input</text>
+<text x="684" y="662" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#a9c3da" font-weight="400" text-anchor="start">USB-C 5 V ≥ 900 mA</text>
+<text x="684" y="679" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#a9c3da" font-weight="400" text-anchor="start">or DC jack 7–12 V</text>
+<text x="684" y="696" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#a9c3da" font-weight="400" text-anchor="start">→ GVS 5 V servo rail</text>
+<rect x="40" y="190" width="290" height="106" rx="10" fill="#ffffff" stroke="#c9d0d6" stroke-width="1.5" />
+<rect x="40" y="190" width="6" height="106" rx="3" fill="#7b4fd6" stroke="none" stroke-width="1" />
+<text x="60" y="216" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="15" fill="#1b1f24" font-weight="700" text-anchor="start">DHT20</text>
+<text x="60" y="235" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">Temperature &amp; humidity</text>
+<text x="60" y="258" font-family="'DejaVu Sans Mono',monospace" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">addr 0x38 · every 5 s</text>
+<text x="60" y="276" font-family="'DejaVu Sans Mono',monospace" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">3.3 V · Grove I²C</text>
+<rect x="576" y="225.0" width="70" height="36" rx="4" fill="#d9433b" stroke="#0b2236" stroke-width="2" />
+<text x="611" y="248.0" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#1b1f24" font-weight="700" text-anchor="middle">I2C1</text>
+<line x1="330" y1="243.0" x2="576" y2="243.0" stroke="#7b4fd6" stroke-width="4" stroke-linecap="round"/>
+<circle cx="330" cy="243.0" r="5" fill="#7b4fd6"/>
+<rect x="370.0" y="231.0" width="40" height="22" rx="11" fill="#ffffff" stroke="#7b4fd6" stroke-width="1.5" />
+<text x="390.0" y="246.5" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11.5" fill="#7b4fd6" font-weight="600" text-anchor="middle">I²C</text>
+<text x="344" y="267.0" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#56606b" font-weight="400" text-anchor="start">SDA → GPIO 11</text>
+<text x="344" y="282.0" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#56606b" font-weight="400" text-anchor="start">SCL → GPIO 12</text>
+<rect x="40" y="318" width="290" height="106" rx="10" fill="#ffffff" stroke="#c9d0d6" stroke-width="1.5" />
+<rect x="40" y="318" width="6" height="106" rx="3" fill="#7b4fd6" stroke="none" stroke-width="1" />
+<text x="60" y="344" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="15" fill="#1b1f24" font-weight="700" text-anchor="start">LCD 1602 + PCF8574</text>
+<text x="60" y="363" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">Local UI (16 × 2 chars)</text>
+<text x="60" y="386" font-family="'DejaVu Sans Mono',monospace" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">addr 0x21 · 200 ms refresh</text>
+<text x="60" y="404" font-family="'DejaVu Sans Mono',monospace" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">3.3 V · Grove I²C</text>
+<rect x="576" y="353.0" width="70" height="36" rx="4" fill="#d9433b" stroke="#0b2236" stroke-width="2" />
+<text x="611" y="376.0" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#1b1f24" font-weight="700" text-anchor="middle">I2C2</text>
+<line x1="330" y1="371.0" x2="576" y2="371.0" stroke="#7b4fd6" stroke-width="4" stroke-linecap="round"/>
+<circle cx="330" cy="371.0" r="5" fill="#7b4fd6"/>
+<rect x="370.0" y="359.0" width="40" height="22" rx="11" fill="#ffffff" stroke="#7b4fd6" stroke-width="1.5" />
+<text x="390.0" y="374.5" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11.5" fill="#7b4fd6" font-weight="600" text-anchor="middle">I²C</text>
+<text x="344" y="395.0" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#56606b" font-weight="400" text-anchor="start">same bus (0x21)</text>
+<text x="344" y="410.0" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#56606b" font-weight="400" text-anchor="start">SDA 11 · SCL 12</text>
+<rect x="40" y="446" width="290" height="106" rx="10" fill="#ffffff" stroke="#c9d0d6" stroke-width="1.5" />
+<rect x="40" y="446" width="6" height="106" rx="3" fill="#d98a00" stroke="none" stroke-width="1" />
+<text x="60" y="472" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="15" fill="#1b1f24" font-weight="700" text-anchor="start">LDR light sensor</text>
+<text x="60" y="491" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">Inside vault: tamper detection</text>
+<text x="60" y="514" font-family="'DejaVu Sans Mono',monospace" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">12-bit 0–4095 · 200 ms</text>
+<text x="60" y="532" font-family="'DejaVu Sans Mono',monospace" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">breach &gt; 1200 · reset &lt; 800</text>
+<rect x="576" y="481.0" width="70" height="36" rx="4" fill="#f2c230" stroke="#0b2236" stroke-width="2" />
+<text x="611" y="504.0" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#1b1f24" font-weight="700" text-anchor="middle">A1-A0</text>
+<line x1="330" y1="499.0" x2="576" y2="499.0" stroke="#d98a00" stroke-width="4" stroke-linecap="round"/>
+<circle cx="330" cy="499.0" r="5" fill="#d98a00"/>
+<rect x="370.0" y="487.0" width="40" height="22" rx="11" fill="#ffffff" stroke="#d98a00" stroke-width="1.5" />
+<text x="390.0" y="502.5" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11.5" fill="#d98a00" font-weight="600" text-anchor="middle">ADC</text>
+<text x="344" y="523.0" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#56606b" font-weight="400" text-anchor="start">A0 → GPIO 1</text>
+<rect x="40" y="574" width="290" height="106" rx="10" fill="#ffffff" stroke="#c9d0d6" stroke-width="1.5" />
+<rect x="40" y="574" width="6" height="106" rx="3" fill="#1f78d1" stroke="none" stroke-width="1" />
+<text x="60" y="600" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="15" fill="#1b1f24" font-weight="700" text-anchor="start">Ultrasonic HC-SR04</text>
+<text x="60" y="619" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">Approach detection</text>
+<text x="60" y="642" font-family="'DejaVu Sans Mono',monospace" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">pulseIn timeout 25 ms</text>
+<text x="60" y="660" font-family="'DejaVu Sans Mono',monospace" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">near &lt; 30 cm · away &gt; 35 cm</text>
+<rect x="576" y="609.0" width="70" height="36" rx="4" fill="#f4f4f2" stroke="#0b2236" stroke-width="2" />
+<text x="611" y="632.0" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#1b1f24" font-weight="700" text-anchor="middle">D4-D3</text>
+<line x1="330" y1="627.0" x2="576" y2="627.0" stroke="#1f78d1" stroke-width="4" stroke-linecap="round"/>
+<circle cx="330" cy="627.0" r="5" fill="#1f78d1"/>
+<rect x="366.0" y="615.0" width="48" height="22" rx="11" fill="#ffffff" stroke="#1f78d1" stroke-width="1.5" />
+<text x="390.0" y="630.5" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11.5" fill="#1f78d1" font-weight="600" text-anchor="middle">GPIO</text>
+<text x="344" y="651.0" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#56606b" font-weight="400" text-anchor="start">Trig D3 → GPIO 6</text>
+<text x="344" y="666.0" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#56606b" font-weight="400" text-anchor="start">Echo D4 → GPIO 7</text>
+<rect x="40" y="702" width="290" height="106" rx="10" fill="#ffffff" stroke="#c9d0d6" stroke-width="1.5" />
+<rect x="40" y="702" width="6" height="106" rx="3" fill="#1f78d1" stroke="none" stroke-width="1" />
+<text x="60" y="728" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="15" fill="#1b1f24" font-weight="700" text-anchor="start">IR receiver VS1838B</text>
+<text x="60" y="747" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">Remote PIN keypad</text>
+<text x="60" y="770" font-family="'DejaVu Sans Mono',monospace" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">NEC protocol · 38 kHz</text>
+<text x="60" y="788" font-family="'DejaVu Sans Mono',monospace" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">C = submit · D = clear</text>
+<rect x="576" y="737.0" width="70" height="36" rx="4" fill="#f4f4f2" stroke="#0b2236" stroke-width="2" />
+<text x="611" y="760.0" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#1b1f24" font-weight="700" text-anchor="middle">D6-D5</text>
+<line x1="330" y1="755.0" x2="576" y2="755.0" stroke="#1f78d1" stroke-width="4" stroke-linecap="round"/>
+<circle cx="330" cy="755.0" r="5" fill="#1f78d1"/>
+<rect x="366.0" y="743.0" width="48" height="22" rx="11" fill="#ffffff" stroke="#1f78d1" stroke-width="1.5" />
+<text x="390.0" y="758.5" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11.5" fill="#1f78d1" font-weight="600" text-anchor="middle">GPIO</text>
+<text x="344" y="779.0" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#56606b" font-weight="400" text-anchor="start">D5 → GPIO 8</text>
+<rect x="994" y="209" width="70" height="72" rx="4" fill="#0b2236" stroke="#3a5f80" stroke-width="2" />
+<text x="986" y="249" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11.5" fill="#ffffff" font-weight="700" text-anchor="end">GVS D11</text>
+<rect x="1016" y="216" width="14" height="14" fill="#d4af37"/>
+<text x="1004" y="227" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11" fill="#ffffff" font-weight="700" text-anchor="middle">G</text>
+<line x1="1030" y1="223" x2="1180" y2="223" stroke="#6b4226" stroke-width="3.5" stroke-linecap="round"/>
+<text x="1080" y="218" font-family="'DejaVu Sans Mono',monospace" font-size="10.5" fill="#56606b" font-weight="400" text-anchor="start">GND</text>
+<rect x="1016" y="238" width="14" height="14" fill="#d4af37"/>
+<text x="1004" y="249" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11" fill="#ffffff" font-weight="700" text-anchor="middle">V</text>
+<line x1="1030" y1="245" x2="1180" y2="245" stroke="#d9433b" stroke-width="3.5" stroke-linecap="round"/>
+<text x="1080" y="240" font-family="'DejaVu Sans Mono',monospace" font-size="10.5" fill="#56606b" font-weight="400" text-anchor="start">+5 V</text>
+<rect x="1016" y="260" width="14" height="14" fill="#d4af37"/>
+<text x="1004" y="271" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11" fill="#ffffff" font-weight="700" text-anchor="middle">S</text>
+<line x1="1030" y1="267" x2="1180" y2="267" stroke="#e0601f" stroke-width="3.5" stroke-linecap="round"/>
+<text x="1080" y="262" font-family="'DejaVu Sans Mono',monospace" font-size="10.5" fill="#56606b" font-weight="400" text-anchor="start">PWM GPIO 38</text>
+<rect x="1180" y="170" width="270" height="150" rx="10" fill="#ffffff" stroke="#c9d0d6" stroke-width="1.5" />
+<rect x="1180" y="170" width="6" height="150" rx="3" fill="#e0601f" stroke="none" stroke-width="1" />
+<text x="1200" y="196" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="15" fill="#1b1f24" font-weight="700" text-anchor="start">Micro servo SG90 / MG90</text>
+<text x="1200" y="215" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">Deadbolt actuator</text>
+<text x="1200" y="238" font-family="'DejaVu Sans Mono',monospace" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">PWM 50 Hz · 500–2500 µs</text>
+<text x="1200" y="256" font-family="'DejaVu Sans Mono',monospace" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">0° = unlocked · 180° = locked</text>
+<text x="1200" y="274" font-family="'DejaVu Sans Mono',monospace" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">peak stall 600–800 mA</text>
+<rect x="1010" y="454" width="54" height="32" rx="8" fill="#c7ccd1" stroke="#8d959c" stroke-width="2" />
+<text x="1037" y="475" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="10.5" fill="#1b1f24" font-weight="700" text-anchor="middle">USB-C</text>
+<line x1="1064" y1="470" x2="1180" y2="470" stroke="#4b5563" stroke-width="6" stroke-linecap="round"/>
+<rect x="1074.0" y="437" width="96" height="22" rx="11" fill="#ffffff" stroke="#4b5563" stroke-width="1.5" />
+<text x="1122.0" y="452.5" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11.5" fill="#4b5563" font-weight="600" text-anchor="middle">USB serial</text>
+<text x="1072" y="496" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#56606b" font-weight="400" text-anchor="start">115200 baud</text>
+<text x="1072" y="512" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#56606b" font-weight="400" text-anchor="start">+5 V supply</text>
+<rect x="1180" y="400" width="270" height="170" rx="10" fill="#ffffff" stroke="#c9d0d6" stroke-width="1.5" />
+<rect x="1180" y="400" width="6" height="170" rx="3" fill="#4b5563" stroke="none" stroke-width="1" />
+<text x="1200" y="426" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="15" fill="#1b1f24" font-weight="700" text-anchor="start">Edge gateway</text>
+<text x="1200" y="445" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">Raspberry Pi Zero 2W or PC</text>
+<text x="1200" y="468" font-family="'DejaVu Sans Mono',monospace" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">/dev/ttyACM0 (auto-detect)</text>
+<text x="1200" y="486" font-family="'DejaVu Sans Mono',monospace" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">gateway.py · Isolation Forest</text>
+<text x="1200" y="504" font-family="'DejaVu Sans Mono',monospace" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">web console :5000</text>
+<rect x="1376.0" y="415" width="56" height="22" rx="11" fill="#ffffff" stroke="#4b5563" stroke-width="1.5" />
+<text x="1404.0" y="430.5" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11.5" fill="#4b5563" font-weight="600" text-anchor="middle">Linux</text>
+<rect x="1500" y="400" width="180" height="170" rx="10" fill="#f6f8fa" stroke="#c9d0d6" stroke-width="1.5" />
+<text x="1518" y="428" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#1b1f24" font-weight="700" text-anchor="start">Cloud &amp; alerts</text>
+<text x="1518" y="456" font-family="'DejaVu Sans Mono',monospace" font-size="11.5" fill="#56606b" font-weight="400" text-anchor="start">CoreIOT MQTT :1883</text>
+<text x="1518" y="478" font-family="'DejaVu Sans Mono',monospace" font-size="11.5" fill="#56606b" font-weight="400" text-anchor="start">ThingsBoard :1883</text>
+<text x="1518" y="500" font-family="'DejaVu Sans Mono',monospace" font-size="11.5" fill="#56606b" font-weight="400" text-anchor="start">Telegram Bot API</text>
+<text x="1518" y="522" font-family="'DejaVu Sans Mono',monospace" font-size="11.5" fill="#8a949e" font-weight="400" text-anchor="start">(Wi-Fi / LAN)</text>
+<line x1="1450" y1="470" x2="1500" y2="470" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-dasharray="2 6"/>
+<rect x="1180" y="670" width="500" height="330" rx="22" fill="#2b2f36" stroke="#15181c" stroke-width="2" />
+<text x="1208" y="710" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="22" fill="#ffffff" font-weight="700" text-anchor="start">Yolo:Bit</text>
+<text x="1208" y="732" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#b7bec7" font-weight="400" text-anchor="start">NODE 2 · Wearable badge · ESP32</text>
+<rect x="1370" y="762" width="20" height="20" rx="3" fill="#3d434b"/>
+<rect x="1396" y="762" width="20" height="20" rx="3" fill="#3d434b"/>
+<rect x="1422" y="762" width="20" height="20" rx="3" fill="#22c55e"/>
+<rect x="1448" y="762" width="20" height="20" rx="3" fill="#3d434b"/>
+<rect x="1474" y="762" width="20" height="20" rx="3" fill="#3d434b"/>
+<rect x="1370" y="788" width="20" height="20" rx="3" fill="#3d434b"/>
+<rect x="1396" y="788" width="20" height="20" rx="3" fill="#22c55e"/>
+<rect x="1422" y="788" width="20" height="20" rx="3" fill="#3d434b"/>
+<rect x="1448" y="788" width="20" height="20" rx="3" fill="#22c55e"/>
+<rect x="1474" y="788" width="20" height="20" rx="3" fill="#3d434b"/>
+<rect x="1370" y="814" width="20" height="20" rx="3" fill="#3d434b"/>
+<rect x="1396" y="814" width="20" height="20" rx="3" fill="#22c55e"/>
+<rect x="1422" y="814" width="20" height="20" rx="3" fill="#3d434b"/>
+<rect x="1448" y="814" width="20" height="20" rx="3" fill="#22c55e"/>
+<rect x="1474" y="814" width="20" height="20" rx="3" fill="#3d434b"/>
+<rect x="1370" y="840" width="20" height="20" rx="3" fill="#22c55e"/>
+<rect x="1396" y="840" width="20" height="20" rx="3" fill="#22c55e"/>
+<rect x="1422" y="840" width="20" height="20" rx="3" fill="#22c55e"/>
+<rect x="1448" y="840" width="20" height="20" rx="3" fill="#22c55e"/>
+<rect x="1474" y="840" width="20" height="20" rx="3" fill="#22c55e"/>
+<rect x="1370" y="866" width="20" height="20" rx="3" fill="#22c55e"/>
+<rect x="1396" y="866" width="20" height="20" rx="3" fill="#22c55e"/>
+<rect x="1422" y="866" width="20" height="20" rx="3" fill="#3d434b"/>
+<rect x="1448" y="866" width="20" height="20" rx="3" fill="#22c55e"/>
+<rect x="1474" y="866" width="20" height="20" rx="3" fill="#22c55e"/>
+<text x="1432.0" y="910" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11.5" fill="#ffffff" font-weight="600" text-anchor="middle">5×5 RGB matrix · GPIO 4</text>
+<text x="1432.0" y="926" font-family="'DejaVu Sans Mono',monospace" font-size="10.5" fill="#b7bec7" font-weight="400" text-anchor="middle">25 × NeoPixel · brightness 40</text>
+<circle cx="1265" cy="825" r="22" fill="#111317" stroke="#5b636d" stroke-width="2"/>
+<circle cx="1265" cy="825" r="14" fill="#e5e7eb"/>
+<text x="1265" y="830" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="13" fill="#1b1f24" font-weight="700" text-anchor="middle">A</text>
+<text x="1265" y="869" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11.5" fill="#ffffff" font-weight="600" text-anchor="middle">GPIO 35</text>
+<text x="1265" y="885" font-family="'DejaVu Sans Mono',monospace" font-size="10.5" fill="#b7bec7" font-weight="400" text-anchor="middle">INPUT</text>
+<text x="1265" y="901" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="10.5" fill="#b7bec7" font-weight="400" text-anchor="middle">Unlock / ack</text>
+<circle cx="1600" cy="825" r="22" fill="#111317" stroke="#5b636d" stroke-width="2"/>
+<circle cx="1600" cy="825" r="14" fill="#e5e7eb"/>
+<text x="1600" y="830" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="13" fill="#1b1f24" font-weight="700" text-anchor="middle">B</text>
+<text x="1600" y="869" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11.5" fill="#ffffff" font-weight="600" text-anchor="middle">GPIO 14</text>
+<text x="1600" y="885" font-family="'DejaVu Sans Mono',monospace" font-size="10.5" fill="#b7bec7" font-weight="400" text-anchor="middle">INPUT_PULLUP</text>
+<text x="1600" y="901" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="10.5" fill="#b7bec7" font-weight="400" text-anchor="middle">Manual lock</text>
+<circle cx="1265" cy="962" r="14" fill="#111317" stroke="#5b636d" stroke-width="2"/>
+<circle cx="1265" cy="962" r="4" fill="#5b636d"/>
+<text x="1288" y="959" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11.5" fill="#ffffff" font-weight="600" text-anchor="start">Piezo buzzer</text>
+<text x="1288" y="974" font-family="'DejaVu Sans Mono',monospace" font-size="10.5" fill="#b7bec7" font-weight="400" text-anchor="start">GPIO 25 · tone()</text>
+<rect x="1535" y="938" width="120" height="44" rx="4" fill="#c7ccd1" stroke="#8d959c" stroke-width="1.5" />
+<text x="1595" y="958" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#1b1f24" font-weight="700" text-anchor="middle">ESP32</text>
+<text x="1595" y="973" font-family="'DejaVu Sans Mono',monospace" font-size="10.5" fill="#1b1f24" font-weight="400" text-anchor="middle">USB-C 5 V</text>
+<path d="M1050 720 L1180 720" fill="none" stroke="#0f9d8a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="8 7"/>
+<circle cx="1050" cy="720" r="5" fill="#0f9d8a"/>
+<rect x="1180" y="583" width="152" height="22" rx="11" fill="#ffffff" stroke="#0f9d8a" stroke-width="1.5" />
+<text x="1256.0" y="598.5" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11.5" fill="#0f9d8a" font-weight="600" text-anchor="middle">ESP-NOW · 2.4 GHz</text>
+<text x="1180" y="622" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#56606b" font-weight="400" text-anchor="start">badge → vault: unlock / lock / ack / pair</text>
+<text x="1180" y="638" font-family="'DejaVu Sans Mono',monospace" font-size="11" fill="#56606b" font-weight="400" text-anchor="start">vault → badge: status + icon · channel 1</text>
+<text x="40" y="905" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#8a949e" font-weight="700" text-anchor="start">LEGEND</text>
+<line x1="40" y1="929" x2="80" y2="929" stroke="#7b4fd6" stroke-width="4" stroke-linecap="round"/>
+<text x="92" y="933" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12.5" fill="#1b1f24" font-weight="400" text-anchor="start">I²C bus (Grove red row)</text>
+<line x1="370" y1="929" x2="410" y2="929" stroke="#d98a00" stroke-width="4" stroke-linecap="round"/>
+<text x="422" y="933" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12.5" fill="#1b1f24" font-weight="400" text-anchor="start">Analog ADC (Grove yellow row)</text>
+<line x1="700" y1="929" x2="740" y2="929" stroke="#1f78d1" stroke-width="4" stroke-linecap="round"/>
+<text x="752" y="933" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12.5" fill="#1b1f24" font-weight="400" text-anchor="start">Digital GPIO (Grove white row)</text>
+<line x1="40" y1="957" x2="80" y2="957" stroke="#e0601f" stroke-width="4" stroke-linecap="round"/>
+<text x="92" y="961" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12.5" fill="#1b1f24" font-weight="400" text-anchor="start">PWM servo signal (GVS)</text>
+<line x1="370" y1="957" x2="410" y2="957" stroke="#4b5563" stroke-width="4" stroke-linecap="round"/>
+<text x="422" y="961" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12.5" fill="#1b1f24" font-weight="400" text-anchor="start">USB-C serial + 5 V power</text>
+<line x1="700" y1="957" x2="740" y2="957" stroke="#0f9d8a" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 7"/>
+<text x="752" y="961" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12.5" fill="#1b1f24" font-weight="400" text-anchor="start">ESP-NOW wireless (no cable)</text>
+<text x="40" y="1009" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#56606b" font-weight="400" text-anchor="start">Grove cable conductors: red = VCC (3.3 V), black = GND, yellow / white = signal. Servo cable: brown = GND, red = +5 V, orange = signal.</text>
+<text x="40" y="1029" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12" fill="#8a949e" font-weight="400" text-anchor="start" font-style="italic">Pin assignments verified against firmware/vault_yolouno and firmware/badge_yolobit sources.</text>
+</svg>
