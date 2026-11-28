@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="700" viewBox="0 0 1000 700">
+<defs><marker id="a0f9d8a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0f9d8a"/></marker><marker id="a4b5563" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#4b5563"/></marker><marker id="a1f78d1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#1f78d1"/></marker><marker id="a7b4fd6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#7b4fd6"/></marker><marker id="ad98a00" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#d98a00"/></marker><marker id="a1f78d1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#1f78d1"/></marker><marker id="ae0601f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#e0601f"/></marker><marker id="a0f9d74" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0f9d74"/></marker><marker id="a6d5bd0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6d5bd0"/></marker><marker id="ab04fc0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#b04fc0"/></marker><marker id="a7d8791" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#7d8791"/></marker></defs>
+<rect x="0" y="0" width="1000" height="700" fill="#ffffff"/>
+<rect x="150" y="15" width="700" height="70" rx="10" fill="#ffffff" stroke="#1f78d1" stroke-width="1.8" stroke-dasharray="7 6"/>
+<text x="500" y="43" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14.5" fill="#1b1f24" font-weight="700" text-anchor="middle">From the Local IoT Gateway (Figure 2.1 (b))</text>
+<text x="500" y="67" font-family="'DejaVu Sans Mono',monospace" font-size="13.5" fill="#4a545e" font-weight="400" text-anchor="middle">MQTT telemetry / RPC · Telegram HTTPS · HTTP/SSE :5000</text>
+<rect x="20" y="110" width="960" height="220" rx="16" fill="#f4f2fd" stroke="#6d5bd0" stroke-width="1.5"/>
+<rect x="20" y="110" width="38" height="220" rx="16" fill="#6d5bd0" stroke="none" stroke-width="1"/>
+<rect x="42" y="110" width="16" height="220" rx="0" fill="#6d5bd0" stroke="none" stroke-width="1"/>
+<text x="45" y="220.0" transform="rotate(-90 45 220.0)" font-family="Inter,'DejaVu Sans',sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">TIER 4 · CLOUD</text>
+<rect x="75" y="130" width="240" height="180" rx="10" fill="#ffffff" stroke="#c9d0d6" stroke-width="1.5"/>
+<rect x="75" y="130" width="6" height="180" rx="3" fill="#6d5bd0" stroke="none" stroke-width="1"/>
+<text x="93" y="157" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="16" fill="#1b1f24" font-weight="700" text-anchor="start">HCMUT CoreIOT</text>
+<text x="93" y="177" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="13.5" fill="#4a545e" font-weight="400" text-anchor="start">Cloud platform</text>
+<text x="93" y="200" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• MQTT broker :1883</text>
+<text x="93" y="220" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• Dashboard (T11)</text>
+<text x="93" y="240" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• RuleChain alarms (T12)</text>
+<text x="93" y="260" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• Public dashboard link</text>
+<rect x="330" y="130" width="320" height="180" rx="10" fill="#ffffff" stroke="#c9d0d6" stroke-width="1.5"/>
+<rect x="330" y="130" width="6" height="180" rx="3" fill="#6d5bd0" stroke="none" stroke-width="1"/>
+<text x="348" y="157" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="16" fill="#1b1f24" font-weight="700" text-anchor="start">Local ThingsBoard (N07)</text>
+<text x="348" y="177" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="13.5" fill="#4a545e" font-weight="400" text-anchor="start">Docker Compose · self-hosted</text>
+<text x="348" y="200" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• tb-node 4.3.1.8 :8080 / :1883</text>
+<text x="348" y="220" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• PostgreSQL 18 persistence</text>
+<text x="348" y="240" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• Same dashboard + RuleChain</text>
+<text x="348" y="260" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• UDP beacon :50051</text>
+<rect x="690" y="130" width="275" height="180" rx="10" fill="#ffffff" stroke="#c9d0d6" stroke-width="1.5"/>
+<rect x="690" y="130" width="6" height="180" rx="3" fill="#6d5bd0" stroke="none" stroke-width="1"/>
+<text x="708" y="157" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="16" fill="#1b1f24" font-weight="700" text-anchor="start">Telegram Bot API</text>
+<text x="708" y="177" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="13.5" fill="#4a545e" font-weight="400" text-anchor="start">api.telegram.org (HTTPS)</text>
+<text x="708" y="200" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• Breach, thermal and</text>
+<text x="708" y="220" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">  bruteforce alerts</text>
+<text x="708" y="240" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• Admin chat-ID whitelist</text>
+<text x="708" y="260" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• /status /unlock /lock …</text>
+<path d="M195 87 L195 128" fill="none" stroke="#1f78d1" stroke-width="2.5" stroke-linejoin="round" marker-start="url(#a1f78d1)" marker-end="url(#a1f78d1)"/>
+<path d="M490 87 L490 128" fill="none" stroke="#1f78d1" stroke-width="2.5" stroke-linejoin="round" marker-start="url(#a1f78d1)" marker-end="url(#a1f78d1)"/>
+<path d="M827 87 L827 128" fill="none" stroke="#1f78d1" stroke-width="2.5" stroke-linejoin="round" marker-start="url(#a1f78d1)" marker-end="url(#a1f78d1)"/>
+<rect x="20" y="390" width="960" height="250" rx="16" fill="#fbf1fc" stroke="#b04fc0" stroke-width="1.5"/>
+<rect x="20" y="390" width="38" height="250" rx="16" fill="#b04fc0" stroke="none" stroke-width="1"/>
+<rect x="42" y="390" width="16" height="250" rx="0" fill="#b04fc0" stroke="none" stroke-width="1"/>
+<text x="45" y="515.0" transform="rotate(-90 45 515.0)" font-family="Inter,'DejaVu Sans',sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">TIER 5 · USERS</text>
+<path d="M670 87 L670 438" fill="none" stroke="#1f78d1" stroke-width="2.5" stroke-linejoin="round" marker-start="url(#a1f78d1)" marker-end="url(#a1f78d1)" stroke-dasharray="7 6"/>
+<rect x="75" y="440" width="400" height="150" rx="10" fill="#ffffff" stroke="#c9d0d6" stroke-width="1.5"/>
+<rect x="75" y="440" width="6" height="150" rx="3" fill="#b04fc0" stroke="none" stroke-width="1"/>
+<text x="93" y="467" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="16" fill="#1b1f24" font-weight="700" text-anchor="start">SOC operator (T11, N06)</text>
+<text x="93" y="487" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="13.5" fill="#4a545e" font-weight="400" text-anchor="start">Browser · CoreIOT or local ThingsBoard</text>
+<text x="93" y="510" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• Dashboard: KPIs, multi-axis chart, alarms</text>
+<text x="93" y="530" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• Access &amp; Security Audit Log (N06)</text>
+<text x="93" y="550" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• 5 remote RPC buttons</text>
+<rect x="495" y="440" width="190" height="150" rx="10" fill="#ffffff" stroke="#c9d0d6" stroke-width="1.5"/>
+<rect x="495" y="440" width="6" height="150" rx="3" fill="#b04fc0" stroke="none" stroke-width="1"/>
+<text x="513" y="467" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="16" fill="#1b1f24" font-weight="700" text-anchor="start">Field technician</text>
+<text x="513" y="487" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="13.5" fill="#4a545e" font-weight="400" text-anchor="start">(T10) on the LAN</text>
+<text x="513" y="510" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">Gateway console</text>
+<text x="513" y="530" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">http://&lt;gw&gt;:5000</text>
+<rect x="705" y="440" width="260" height="150" rx="10" fill="#ffffff" stroke="#c9d0d6" stroke-width="1.5"/>
+<rect x="705" y="440" width="6" height="150" rx="3" fill="#b04fc0" stroke="none" stroke-width="1"/>
+<text x="723" y="467" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="16" fill="#1b1f24" font-weight="700" text-anchor="start">Mobile responder</text>
+<text x="723" y="487" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="13.5" fill="#4a545e" font-weight="400" text-anchor="start">(T13) Telegram app</text>
+<text x="723" y="510" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• Real-time alerts</text>
+<text x="723" y="530" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• RBAC commands</text>
+<text x="723" y="550" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• Breach-cleared notice</text>
+<path d="M195 312 L195 438" fill="none" stroke="#b04fc0" stroke-width="2.5" stroke-linejoin="round" marker-start="url(#ab04fc0)" marker-end="url(#ab04fc0)"/>
+<path d="M400 312 L400 438" fill="none" stroke="#b04fc0" stroke-width="2.5" stroke-linejoin="round" marker-start="url(#ab04fc0)" marker-end="url(#ab04fc0)"/>
+<path d="M835 312 L835 438" fill="none" stroke="#b04fc0" stroke-width="2.5" stroke-linejoin="round" marker-start="url(#ab04fc0)" marker-end="url(#ab04fc0)"/>
+<rect x="224.25" y="348" width="147.5" height="24" rx="12" fill="#ffffff" stroke="#b04fc0" stroke-width="1.6"/>
+<text x="298" y="364.5" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12.5" fill="#b04fc0" font-weight="700" text-anchor="middle">HTTPS / WebSocket</text>
+<rect x="806.25" y="348" width="57.5" height="24" rx="12" fill="#ffffff" stroke="#b04fc0" stroke-width="1.6"/>
+<text x="835" y="364.5" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12.5" fill="#b04fc0" font-weight="700" text-anchor="middle">HTTPS</text>
+<rect x="622.5" y="348" width="95.0" height="24" rx="12" fill="#ffffff" stroke="#1f78d1" stroke-width="1.6"/>
+<text x="670" y="364.5" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="12.5" fill="#1f78d1" font-weight="700" text-anchor="middle">HTTP / SSE</text>
+<text x="30" y="668" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="13" fill="#7d8791" font-weight="400" text-anchor="start" font-style="italic">Both platforms receive the same telemetry and audit events and accept RPCs; the ThingsBoard Gateway API (v1/gateway/*) is not used.</text>
+</svg>

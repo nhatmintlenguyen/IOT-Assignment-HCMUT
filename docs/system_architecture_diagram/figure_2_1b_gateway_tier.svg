@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="640" viewBox="0 0 1000 640">
+<defs><marker id="a0f9d8a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0f9d8a"/></marker><marker id="a4b5563" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#4b5563"/></marker><marker id="a1f78d1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#1f78d1"/></marker><marker id="a7b4fd6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#7b4fd6"/></marker><marker id="ad98a00" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#d98a00"/></marker><marker id="a1f78d1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#1f78d1"/></marker><marker id="ae0601f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#e0601f"/></marker><marker id="a0f9d74" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0f9d74"/></marker><marker id="a6d5bd0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6d5bd0"/></marker><marker id="ab04fc0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#b04fc0"/></marker><marker id="a7d8791" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#7d8791"/></marker></defs>
+<rect x="0" y="0" width="1000" height="640" fill="#ffffff"/>
+<rect x="20" y="20" width="960" height="605" rx="16" fill="#effaf5" stroke="#0f9d74" stroke-width="1.5"/>
+<rect x="20" y="20" width="960" height="36" rx="16" fill="#0f9d74" stroke="none" stroke-width="1"/>
+<rect x="20" y="40" width="960" height="16" rx="0" fill="#0f9d74" stroke="none" stroke-width="1"/>
+<text x="38" y="44" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="15" fill="#ffffff" font-weight="700" text-anchor="start">TIERS 2–3 · LOCAL COMMUNICATION &amp; EDGE GATEWAY TIER</text>
+<rect x="250" y="65" width="500" height="70" rx="10" fill="#ffffff" stroke="#4b5563" stroke-width="1.8" stroke-dasharray="7 6"/>
+<text x="500" y="92" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14.5" fill="#1b1f24" font-weight="700" text-anchor="middle">From the YoloUNO vault (Figure 2.1 (a))</text>
+<text x="500" y="117" font-family="'DejaVu Sans Mono',monospace" font-size="13.5" fill="#4a545e" font-weight="400" text-anchor="middle">USB CDC serial · 115 200 baud · newline JSON</text>
+<path d="M500 137 L500 203" fill="none" stroke="#4b5563" stroke-width="4" stroke-linejoin="round" marker-start="url(#a4b5563)" marker-end="url(#a4b5563)"/>
+<text x="514" y="176" font-family="'DejaVu Sans Mono',monospace" font-size="12.5" fill="#4a545e" font-weight="400" text-anchor="start">▲ telemetry / events   ▼ commands</text>
+<rect x="270" y="205" width="460" height="205" rx="10" fill="#ffffff" stroke="#c9d0d6" stroke-width="1.5"/>
+<rect x="270" y="205" width="6" height="205" rx="3" fill="#0f9d74" stroke="none" stroke-width="1"/>
+<text x="288" y="232" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="16" fill="#1b1f24" font-weight="700" text-anchor="start">Local IoT Gateway daemon</text>
+<text x="288" y="252" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="13.5" fill="#4a545e" font-weight="400" text-anchor="start">gateway/gateway.py · PC or Raspberry Pi Zero 2W</text>
+<text x="288" y="275" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• Serial JSON parser + 1.5 s event dedup</text>
+<text x="288" y="295" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• Dual MQTT clients: CoreIOT + local TB</text>
+<text x="288" y="315" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• CoreIOT offline buffer (5,000 frames)</text>
+<text x="288" y="335" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• Telegram bot: alerts + RBAC commands</text>
+<text x="288" y="355" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">• UDP beacon discovery · systemd service</text>
+<rect x="30" y="225" width="210" height="165" rx="10" fill="#ffffff" stroke="#c9d0d6" stroke-width="1.5"/>
+<rect x="30" y="225" width="6" height="165" rx="3" fill="#0f9d74" stroke="none" stroke-width="1"/>
+<text x="48" y="252" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="16" fill="#1b1f24" font-weight="700" text-anchor="start">Edge AI (T09)</text>
+<text x="48" y="272" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="13.5" fill="#4a545e" font-weight="400" text-anchor="start">anomaly_detector.py</text>
+<text x="48" y="295" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">2 Isolation Forest</text>
+<text x="48" y="315" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">models + rule flags</text>
+<text x="48" y="335" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">anomaly ⇔ score ≥ 0.50</text>
+<rect x="760" y="225" width="210" height="165" rx="10" fill="#ffffff" stroke="#c9d0d6" stroke-width="1.5"/>
+<rect x="760" y="225" width="6" height="165" rx="3" fill="#0f9d74" stroke="none" stroke-width="1"/>
+<text x="778" y="252" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="16" fill="#1b1f24" font-weight="700" text-anchor="start">Web console (T10)</text>
+<text x="778" y="272" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="13.5" fill="#4a545e" font-weight="400" text-anchor="start">web_server.py</text>
+<text x="778" y="295" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">HTTP :5000 · SSE</text>
+<text x="778" y="315" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">7 KPI cards · 5 buttons</text>
+<text x="778" y="335" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="14" fill="#4a545e" font-weight="400" text-anchor="start">serial CLI</text>
+<path d="M242 308 L268 308" fill="none" stroke="#0f9d74" stroke-width="2.5" stroke-linejoin="round" marker-start="url(#a0f9d74)" marker-end="url(#a0f9d74)"/>
+<path d="M732 308 L758 308" fill="none" stroke="#0f9d74" stroke-width="2.5" stroke-linejoin="round" marker-start="url(#a0f9d74)" marker-end="url(#a0f9d74)"/>
+<path d="M300 412 L300 445 L140.0 445 L140.0 478" fill="none" stroke="#1f78d1" stroke-width="2.5" stroke-linejoin="round" marker-start="url(#a1f78d1)" marker-end="url(#a1f78d1)"/>
+<rect x="35" y="480" width="210" height="100" rx="10" fill="#ffffff" stroke="#1f78d1" stroke-width="1.8" stroke-dasharray="7 6"/>
+<text x="140.0" y="510" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="15" fill="#1b1f24" font-weight="700" text-anchor="middle">HCMUT CoreIOT</text>
+<text x="140.0" y="535" font-family="'DejaVu Sans Mono',monospace" font-size="13.5" fill="#1f78d1" font-weight="700" text-anchor="middle">MQTT :1883</text>
+<text x="140.0" y="559" font-family="'DejaVu Sans Mono',monospace" font-size="13" fill="#4a545e" font-weight="400" text-anchor="middle">▲ telemetry ▼ RPC</text>
+<path d="M400 412 L400 445 L380.0 445 L380.0 478" fill="none" stroke="#1f78d1" stroke-width="2.5" stroke-linejoin="round" marker-start="url(#a1f78d1)" marker-end="url(#a1f78d1)"/>
+<rect x="275" y="480" width="210" height="100" rx="10" fill="#ffffff" stroke="#1f78d1" stroke-width="1.8" stroke-dasharray="7 6"/>
+<text x="380.0" y="510" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="15" fill="#1b1f24" font-weight="700" text-anchor="middle">Local ThingsBoard CE</text>
+<text x="380.0" y="535" font-family="'DejaVu Sans Mono',monospace" font-size="13.5" fill="#1f78d1" font-weight="700" text-anchor="middle">MQTT :1883</text>
+<text x="380.0" y="559" font-family="'DejaVu Sans Mono',monospace" font-size="13" fill="#4a545e" font-weight="400" text-anchor="middle">▲ telemetry ▼ RPC</text>
+<path d="M640 412 L640 445 L620.0 445 L620.0 478" fill="none" stroke="#1f78d1" stroke-width="2.5" stroke-linejoin="round" marker-start="url(#a1f78d1)" marker-end="url(#a1f78d1)"/>
+<rect x="515" y="480" width="210" height="100" rx="10" fill="#ffffff" stroke="#1f78d1" stroke-width="1.8" stroke-dasharray="7 6"/>
+<text x="620.0" y="510" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="15" fill="#1b1f24" font-weight="700" text-anchor="middle">Telegram Bot API</text>
+<text x="620.0" y="535" font-family="'DejaVu Sans Mono',monospace" font-size="13.5" fill="#1f78d1" font-weight="700" text-anchor="middle">HTTPS</text>
+<text x="620.0" y="559" font-family="'DejaVu Sans Mono',monospace" font-size="13" fill="#4a545e" font-weight="400" text-anchor="middle">▲ alerts ▼ commands</text>
+<path d="M865 392 L865.0 478" fill="none" stroke="#1f78d1" stroke-width="2.5" stroke-linejoin="round" marker-start="url(#a1f78d1)" marker-end="url(#a1f78d1)"/>
+<rect x="760" y="480" width="210" height="100" rx="10" fill="#ffffff" stroke="#1f78d1" stroke-width="1.8" stroke-dasharray="7 6"/>
+<text x="865.0" y="510" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="15" fill="#1b1f24" font-weight="700" text-anchor="middle">Field technician</text>
+<text x="865.0" y="535" font-family="'DejaVu Sans Mono',monospace" font-size="13.5" fill="#1f78d1" font-weight="700" text-anchor="middle">HTTP / SSE :5000</text>
+<text x="865.0" y="559" font-family="'DejaVu Sans Mono',monospace" font-size="13" fill="#4a545e" font-weight="400" text-anchor="middle">browser on the LAN</text>
+<path d="M460 480 L460 414" fill="none" stroke="#7d8791" stroke-width="2" stroke-linejoin="round" marker-end="url(#a7d8791)" stroke-dasharray="4 5"/>
+<text x="468" y="468" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="11.5" fill="#7d8791" font-weight="400" text-anchor="start">UDP beacon</text>
+<text x="45" y="600" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="13" fill="#7d8791" font-weight="400" text-anchor="start" font-style="italic">Store-and-forward: CoreIOT telemetry produced while the cloud link is down is buffered with its original</text>
+<text x="45" y="618" font-family="Inter,'DejaVu Sans',Arial,sans-serif" font-size="13" fill="#7d8791" font-weight="400" text-anchor="start" font-style="italic">timestamp and replayed in order on reconnection. Targets continue in Figure 2.1 (c).</text>
+</svg>
